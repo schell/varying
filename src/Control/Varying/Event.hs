@@ -1,8 +1,11 @@
+{-# LANGUAGE Arrows #-}
 module Control.Varying.Event (
     Event(..),
+    mergeWith,
     -- * Transforming event values.
     toMaybe,
     -- * Combining events and values
+    latchWith,
     orE,
     -- * Generating events from values
     use,
@@ -38,9 +41,19 @@ toMaybe :: Event a -> Maybe a
 toMaybe (Event a) = Just a
 toMaybe _ = Nothing
 --------------------------------------------------------------------------------
--- Combining value yarn and event yarn
+-- Combining varying values and events
 --------------------------------------------------------------------------------
--- | Produces values from the first yarn unless the second produces event
+latchWith :: Monad m
+          => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c) -> Var m a (Event d)
+latchWith f vb vc = latchWith' (NoEvent, vb) vc
+    where latchWith' (eb, vb') vc' =
+              Var $ \e -> do (eb', vb'') <- runVar vb' e
+                             (ec', vc'') <- runVar vc' e
+                             let eb'' = eb' <|> eb
+                             return (mergeWith f eb'' ec', latchWith' (eb'', vb'') vc'')
+
+
+-- | Produces values from the first unless the second produces event
 -- values and if so, produces the values of those events.
 orE :: Monad m => Var m a b -> Var m a (Event b) -> Var m a b
 orE y ye = Var $ \a -> do
@@ -199,6 +212,13 @@ andThenWith = go Nothing
               case e of
                   NoEvent -> runVar (f mb) a
                   Event b -> return $ (b, go (Just b) w1' f)
+
+--------------------------------------------------------------------------------
+-- Operations on Events
+--------------------------------------------------------------------------------
+mergeWith :: (a -> b -> c) -> Event a -> Event b -> Event c
+mergeWith f (Event a) (Event b) = Event $ f a b
+mergeWith _ _ _ = NoEvent
 
 instance Show a => Show (Event a) where
     show (Event a) = "Event " ++ show a
