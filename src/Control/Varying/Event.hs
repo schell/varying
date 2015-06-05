@@ -2,11 +2,13 @@
 module Control.Varying.Event (
     Event(..),
     mergeWith,
+    valueOr,
     -- * Transforming event values.
     toMaybe,
     -- * Combining events and values
     latchWith,
     orE,
+    tagOn,
     -- * Generating events from values
     use,
     onTrue,
@@ -34,6 +36,7 @@ module Control.Varying.Event (
 
 import Control.Varying.Core
 import Control.Applicative
+import Control.Arrow
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values.
 --------------------------------------------------------------------------------
@@ -62,6 +65,12 @@ orE y ye = Var $ \a -> do
     return $ case e of
         NoEvent  -> (b, orE y' ye')
         Event b' -> (b', orE y' ye')
+
+tagOn :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+tagOn vb ve = proc a -> do
+    b <- vb -< a
+    e <- ve -< a
+    returnA -< b <$ e
 --------------------------------------------------------------------------------
 -- Generating events from values
 --------------------------------------------------------------------------------
@@ -219,6 +228,10 @@ andThenWith = go Nothing
 mergeWith :: (a -> b -> c) -> Event a -> Event b -> Event c
 mergeWith f (Event a) (Event b) = Event $ f a b
 mergeWith _ _ _ = NoEvent
+
+valueOr :: Event a -> a -> a
+valueOr (Event a) _ = a
+valueOr _ a = a
 
 instance Show a => Show (Event a) where
     show (Event a) = "Event " ++ show a

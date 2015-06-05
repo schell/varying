@@ -75,10 +75,14 @@ linear c t b = c * t + b
 type Easing t = t -> t -> t -> t
 type Tween m t = t -> t -> t -> Var m t (Event t)
 
+constant :: (Monad m, Num t, Ord t) => a -> t -> Var m t (Event a)
+constant value duration = use value $ before duration
+
 tween :: (Monad m, Fractional t, Ord t) => Easing t -> t -> t -> t -> Var m t (Event t)
 tween f start end dur = proc dt -> do
     -- Current time as percentage / amount of interpolation (0.0 - 1.0)
     t <- timeAsPercentageOf dur -< dt
+
     -- Emitted event
     e <- before dur -< dt
 
@@ -87,6 +91,7 @@ tween f start end dur = proc dt -> do
         b = start
         x = f c t b
 
+    -- Tag the event with the value.
     returnA -< x <$ e
 
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
@@ -94,4 +99,3 @@ timeAsPercentageOf :: (Monad m, Ord t, Num t, Fractional t) => t -> Var m t t
 timeAsPercentageOf t = proc dt -> do
     t' <- foldWith (+) 0 -< dt
     returnA -< min 1 (t' / t)
---timeAsPercentageOf t = liftA2 min 1.0 (time / pure t)
