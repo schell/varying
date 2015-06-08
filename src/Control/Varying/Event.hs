@@ -1,8 +1,7 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 module Control.Varying.Event (
     Event(..),
-    mergeWith,
-    valueOr,
     -- * Transforming event values.
     toMaybe,
     -- * Combining events and values
@@ -15,15 +14,16 @@ module Control.Varying.Event (
     onJust,
     onUnique,
     onWhen,
-    -- * Using timed events
-    before,
-    after,
     -- * Using events
     collect,
     hold,
     holdWith,
     startingWith,
     startWith,
+    -- * Stream primitives
+    between,
+    until,
+    after,
     always,
     never,
     -- * Switching and chaining events
@@ -34,6 +34,7 @@ module Control.Varying.Event (
     untilWithE
 ) where
 
+import Prelude hiding (until)
 import Control.Varying.Core
 import Control.Applicative
 import Control.Arrow
@@ -53,7 +54,7 @@ latchWith f vb vc = latchWith' (NoEvent, vb) vc
               Var $ \e -> do (eb', vb'') <- runVar vb' e
                              (ec', vc'') <- runVar vc' e
                              let eb'' = eb' <|> eb
-                             return (mergeWith f eb'' ec', latchWith' (eb'', vb'') vc'')
+                             return $ (do f <$> eb'' <*> ec', latchWith' (eb'', vb'') vc'')
 
 
 -- | Produces values from the first unless the second produces event
@@ -105,27 +106,6 @@ onUnique = trigger NoEvent
 -- | Triggers an `Event a` when the condition is met.
 onWhen :: Applicative m => (a -> Bool) -> Var m a (Event a)
 onWhen f = var $ \a -> if f a then Event a else NoEvent
-
---------------------------------------------------------------------------------
--- Using timed events
---------------------------------------------------------------------------------
--- | Emits events before accumulating == t input.
--- Note that as soon as we have accumulated >= t we stop emitting events
--- and there is no guarantee that an event will be emitted at time == t.
-before :: (Monad m, Num t, Ord t) => t -> Var m t (Event ())
-before t = Var $ \dt -> do
-    if t - dt >= 0
-    then return (Event (), before $ t - dt)
-    else return (NoEvent, never)
-
--- | Emits events after t input has been accumulated.
--- Note that event emission is not guaranteed to begin exactly at t,
--- only at some small delta after t.
-after :: (Monad m, Num t, Ord t) => t -> Var m t (Event ())
-after t = Var $ \dt -> do
-    if t - dt <= 0
-    then return (Event (), pure $ Event ())
-    else return (NoEvent, after $ t - dt)
 --------------------------------------------------------------------------------
 -- Using event values
 --------------------------------------------------------------------------------
@@ -171,13 +151,46 @@ hold w initial = Var $ \x -> do
         NoEvent -> (initial, hold w' initial)
         Event e -> (e, hold w' e)
 
+-- | Produce events after the first until the second. After a successful
+-- cycle it will start over.
+between :: Monad m => Var m a (Event b) -> Var m a (Event c) -> Var m a (Event ())
+between vb vc = (never `before` vb) `andThenE` (always vu `before` vc) `andThen` between vb vc
+    where vu = pure ()
+
+-- | Produce events with the initial value only after the input stream has
+-- produced one event.
+after :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+after vb ve = Var $ \a -> do
+    (_, vb') <- runVar vb a
+    (e, ve') <- runVar ve a
+    case e of
+        Event _ -> return (NoEvent, always vb')
+        NoEvent -> return (NoEvent, vb' `after` ve')
+
+-- | Produce events with the initial varying value only before the second stream
+-- has produced one event.
+before :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+before = until
+
+-- | Produce events with the initial varying value until the input stream
+-- produces its first event, then never produce any events.
+until :: Monad m => Var m a b -> Var m a (Event d) -> Var m a (Event b)
+until vb ve = Var $ \a -> do
+    (b, vb') <- runVar vb a
+    (e, ve') <- runVar ve a
+    case e of
+        Event _ -> return (NoEvent, never)
+        NoEvent -> return (Event b, vb' `until` ve')
+
+-- | Produce
+
 -- | Never produces any event values.
 never :: Monad m => Var m b (Event c)
 never = pure NoEvent
 
--- | Produces events of input values forever, always.
-always :: Applicative m => Var m a (Event a)
-always = var $ \a -> Event a
+-- | Produces events with the initial value forever.
+always :: Monad m => Var m a b -> Var m a (Event b)
+always = (~> var Event)
 --------------------------------------------------------------------------------
 -- Switching yarn on events
 --------------------------------------------------------------------------------
@@ -225,14 +238,6 @@ andThenWith = go Nothing
 --------------------------------------------------------------------------------
 -- Operations on Events
 --------------------------------------------------------------------------------
-mergeWith :: (a -> b -> c) -> Event a -> Event b -> Event c
-mergeWith f (Event a) (Event b) = Event $ f a b
-mergeWith _ _ _ = NoEvent
-
-valueOr :: Event a -> a -> a
-valueOr (Event a) _ = a
-valueOr _ a = a
-
 instance Show a => Show (Event a) where
     show (Event a) = "Event " ++ show a
     show NoEvent   = "NoEvent"
@@ -256,6 +261,11 @@ instance Num a => Num (Event a) where
     abs = fmap abs
     signum = fmap signum
     fromInteger = pure . fromInteger
+
+instance Monad Event where
+   return = Event
+   (Event a) >>= f = f a
+   _ >>= _ = NoEvent
 
 instance Alternative Event where
     empty = NoEvent

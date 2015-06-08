@@ -4,7 +4,8 @@
 module Control.Varying.Tween where
 
 import Control.Varying.Core
-import Control.Varying.Event
+import Control.Varying.Event hiding (after)
+import Control.Varying.Time
 import Control.Arrow
 
 easeInQuad :: Num t => Easing t
