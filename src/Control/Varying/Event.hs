@@ -1,4 +1,5 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 module Control.Varying.Event (
     Event(..),
@@ -8,6 +9,8 @@ module Control.Varying.Event (
     latchWith,
     orE,
     tagOn,
+    tagM,
+    ringM,
     -- * Generating events from values
     use,
     onTrue,
@@ -30,8 +33,6 @@ module Control.Varying.Event (
     andThen,
     andThenWith,
     andThenE,
-    untilE,
-    untilWithE
 ) where
 
 import Prelude hiding (until)
@@ -47,12 +48,16 @@ toMaybe _ = Nothing
 --------------------------------------------------------------------------------
 -- Combining varying values and events
 --------------------------------------------------------------------------------
+-- | Holds the last value of one event stream while waiting for another event
+-- stream to produce a value. Once both streams have produced a value combine
+-- the two using the given combine function.
 latchWith :: Monad m
-          => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c) -> Var m a (Event d)
+          => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c)
+          -> Var m a (Event d)
 latchWith f vb vc = latchWith' (NoEvent, vb) vc
     where latchWith' (eb, vb') vc' =
-              Var $ \e -> do (eb', vb'') <- runVar vb' e
-                             (ec', vc'') <- runVar vc' e
+              Var $ \a -> do (eb', vb'') <- runVar vb' a
+                             (ec', vc'') <- runVar vc' a
                              let eb'' = eb' <|> eb
                              return $ (do f <$> eb'' <*> ec', latchWith' (eb'', vb'') vc'')
 
@@ -67,11 +72,37 @@ orE y ye = Var $ \a -> do
         NoEvent  -> (b, orE y' ye')
         Event b' -> (b', orE y' ye')
 
+-- | Injects the values of the `vb` into the events of `ve`.
 tagOn :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
 tagOn vb ve = proc a -> do
     b <- vb -< a
     e <- ve -< a
     returnA -< b <$ e
+
+-- | Injects a monadic computation into an event stream, using the event
+-- values of type `b` as a parameter to produce an event stream of type
+-- `c`. After the first time an event is generated the result of the
+-- previous event is used in a clean up function.
+--
+-- This is like `tagM` but performs a cleanup function first.
+ringM :: Monad m
+      => (c -> m ()) -> (b -> m c) -> Var m a (Event b) -> Var m a (Event c)
+ringM cln = (go (const $ return ()) .) . tagM
+    where go f ve = Var $ \a -> do (ec, ve') <- runVar ve a
+                                   case ec of
+                                       NoEvent -> return (ec, go f ve')
+                                       Event c -> do f c
+                                                     return (ec, go cln ve')
+
+-- | Injects a monadic computation into the events of `vb`, providing a way
+-- to perform side-effects inside an `Event` inside a `Var`.
+tagM :: Monad m => (b -> m c) -> Var m a (Event b) -> Var m a (Event c)
+tagM f vb = Var $ \a -> do
+    (eb, vb') <- runVar vb a
+    case eb of
+        Event b -> do c <- f b
+                      return (Event c, tagM f vb')
+        NoEvent -> return (NoEvent, tagM f vb')
 --------------------------------------------------------------------------------
 -- Generating events from values
 --------------------------------------------------------------------------------
@@ -106,6 +137,10 @@ onUnique = trigger NoEvent
 -- | Triggers an `Event a` when the condition is met.
 onWhen :: Applicative m => (a -> Bool) -> Var m a (Event a)
 onWhen f = var $ \a -> if f a then Event a else NoEvent
+
+-- | Wraps all produced values of the given var with events.
+toEvent :: Monad m => Var m a b -> Var m a (Event b)
+toEvent = (~> var Event)
 --------------------------------------------------------------------------------
 -- Using event values
 --------------------------------------------------------------------------------
@@ -134,8 +169,8 @@ startingWith, startWith :: Monad m => a -> Var m (Event a) a
 startingWith = startWith
 startWith a = Var $ \ma ->
     return $ case ma of
-                 NoEvent  -> (a, (startWith) a)
-                 Event a' -> (a', (startWith) a')
+                 NoEvent  -> (a, startWith a)
+                 Event a' -> (a', startWith a')
 
 -- | Flipped version of `hold`.
 holdWith :: Monad m => b -> Var m a (Event b) -> Var m a b
@@ -154,7 +189,7 @@ hold w initial = Var $ \x -> do
 -- | Produce events after the first until the second. After a successful
 -- cycle it will start over.
 between :: Monad m => Var m a (Event b) -> Var m a (Event c) -> Var m a (Event ())
-between vb vc = (never `before` vb) `andThenE` (always vu `before` vc) `andThen` between vb vc
+between vb vc = (never `before` vb) `andThenE` (toEvent vu `before` vc) `andThen` between vb vc
     where vu = pure ()
 
 -- | Produce events with the initial value only after the input stream has
@@ -164,7 +199,7 @@ after vb ve = Var $ \a -> do
     (_, vb') <- runVar vb a
     (e, ve') <- runVar ve a
     case e of
-        Event _ -> return (NoEvent, always vb')
+        Event _ -> return (NoEvent, toEvent vb')
         NoEvent -> return (NoEvent, vb' `after` ve')
 
 -- | Produce events with the initial varying value only before the second stream
@@ -172,9 +207,9 @@ after vb ve = Var $ \a -> do
 before :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
 before = until
 
--- | Produce events with the initial varying value until the input stream
--- produces its first event, then never produce any events.
-until :: Monad m => Var m a b -> Var m a (Event d) -> Var m a (Event b)
+-- | Produce events with the initial varying value until the input event stream
+-- `ve` produces its first event, then never produce any events.
+until :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
 until vb ve = Var $ \a -> do
     (b, vb') <- runVar vb a
     (e, ve') <- runVar ve a
@@ -182,15 +217,16 @@ until vb ve = Var $ \a -> do
         Event _ -> return (NoEvent, never)
         NoEvent -> return (Event b, vb' `until` ve')
 
--- | Produce
 
 -- | Never produces any event values.
 never :: Monad m => Var m b (Event c)
 never = pure NoEvent
 
 -- | Produces events with the initial value forever.
-always :: Monad m => Var m a b -> Var m a (Event b)
-always = (~> var Event)
+--always :: Monad m => Var m a b -> Var m a (Event b)
+--always = (~> var Event)
+always :: Monad m => b -> Var m a (Event b)
+always = pure . Event
 --------------------------------------------------------------------------------
 -- Switching yarn on events
 --------------------------------------------------------------------------------
@@ -199,8 +235,8 @@ always = (~> var Event)
 andThen :: Monad m => Var m a (Event b) -> Var m a b -> Var m a b
 andThen w1 w2 = w1 `andThenWith` const w2
 
--- | Produces the first yarn's Event values until that stops producing,
--- then switches to the second yarn's Event values.
+-- | Switches from one event stream to another once the first stops
+-- producing.
 andThenE :: Monad m => Var m a (Event b) -> Var m a (Event b) -> Var m a (Event b)
 andThenE y1 y2 = Var $ \a -> do
     (e, y1') <- runVar y1 a
@@ -208,33 +244,17 @@ andThenE y1 y2 = Var $ \a -> do
         NoEvent -> runVar y2 a
         Event b -> return $ (Event b, y1' `andThenE` y2)
 
--- | Produces a Event values of the first yarn's values until the second
--- yarn produces an Event value, then produces Event values of the second.
-untilE :: Monad m => Var m a b -> Var m a (Event b) -> Var m a (Event b)
-untilE w1 w2 = Var $ \a -> do
-    (mb, w2') <- runVar w2 a
-    case mb of
-        NoEvent -> do (b, w1') <- runVar w1 a
-                      return $ (Event b, w1' `untilE` w2')
-        _  -> return $ (mb, w2')
-
-untilWithE :: Monad m => Var m a b -> Var m a (Event c) -> (c -> Var m a b)
-           -> Var m a b
-untilWithE y ey f = Var $ \a -> do
-    (mb, ey') <- runVar ey a
-    case mb of
-        NoEvent -> do (b, y') <- runVar y a
-                      return $ (b, ((y') `untilWithE`) ey' f)
-        Event b -> runVar (f b) a
-
-andThenWith :: Monad m => Var m a (Event b) -> (Maybe b -> Var m a b) -> Var m a b
+-- | Switches from one event stream when that stream stops producing. A new
+-- stream is created using the last produced value (or `Nothing`) and used
+-- as the second stream.
+andThenWith :: Monad m
+            => Var m a (Event b) -> (Maybe b -> Var m a b) -> Var m a b
 andThenWith = go Nothing
     where go mb w1 f = Var $ \a -> do
               (e, w1') <- runVar w1 a
               case e of
                   NoEvent -> runVar (f mb) a
                   Event b -> return $ (b, go (Just b) w1' f)
-
 --------------------------------------------------------------------------------
 -- Operations on Events
 --------------------------------------------------------------------------------
