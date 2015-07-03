@@ -4,9 +4,13 @@ import Prelude hiding (id, (.))
 import Control.Arrow
 import Control.Category
 import Control.Applicative
+import Debug.Trace
 
 -- | A kind of Mealy machine with effects.
 data Var m b c = Var { runVar :: b -> m (c, Var m b c) }
+
+vtrace :: (Applicative a, Show b) => Var a b b
+vtrace = var $ \b -> trace (show b) b
 
 var :: Applicative a => (b -> c) -> Var a b c
 var f = Var $ \a -> pure $ (f a, var f)
@@ -43,6 +47,18 @@ testVar v = loopVar_ $ varM (const $ putStrLn "input: ")
                     ~> v
                     ~> varM (putStrLn . show)
 
+-- | Accumulates input values fold function and yields
+-- that accumulated value each step.
+accumulate :: Monad m => (c -> b -> c) -> c -> Var m b c
+accumulate f b = Var $ \a -> do
+    let b' = f b a
+    return (b', accumulate f b')
+
+delay :: Monad m => b -> Var m a b -> Var m a b
+delay b v = Var $ \a -> do
+    (b', v') <- runVar v a
+    return (b, delay b' v')
+
 -- | Plugs the output value of v1 into the input value of v2.
 (~>) :: Monad m => Var m a b -> Var m b c -> Var m a c
 (~>) v1 v2 = Var $ \a -> do
@@ -54,18 +70,6 @@ infixr 1 ~>
 (<~) :: Monad m => Var m b c -> Var m a b -> Var m a c
 (<~) = flip (~>)
 infixl 1 <~
-
--- | Folds input values into an accumulator using a fold function and yields
--- that accumulator each step.
-foldWith :: Monad m => (c -> b -> c) -> c -> Var m b c
-foldWith f b = Var $ \a -> do
-    let b' = f b a
-    return (b', foldWith f b')
-
-delay :: Monad m => b -> Var m a b -> Var m a b
-delay b v = Var $ \a -> do
-    (b', v') <- runVar v a
-    return (b, delay b' v')
 
 instance Monad m => Functor (Var m b) where
     fmap f' v = v ~> var f'

@@ -27,6 +27,8 @@ module Control.Varying.Event (
     between,
     until,
     after,
+    takeE,
+    once,
     always,
     never,
     -- * Switching and chaining events
@@ -167,8 +169,8 @@ collect = collectWith (:)
 -- instead of another yarn.
 startingWith, startWith :: Monad m => a -> Var m (Event a) a
 startingWith = startWith
-startWith a = Var $ \ma ->
-    return $ case ma of
+startWith a = Var $ \e ->
+    return $ case e of
                  NoEvent  -> (a, startWith a)
                  Event a' -> (a', startWith a')
 
@@ -217,6 +219,17 @@ until vb ve = Var $ \a -> do
         Event _ -> return (NoEvent, never)
         NoEvent -> return (Event b, vb' `until` ve')
 
+-- | Produce the given value once and then inhibit forever.
+once :: Monad m => b -> Var m a (Event b)
+once b = Var $ \_ -> return (Event b, never)
+
+-- | Stream through some number of successful events and then inhibit forever.
+takeE :: Monad m => Int -> Var m a (Event b) -> Var m a (Event b)
+takeE n ve = Var $ \a -> do
+    (eb, ve') <- runVar ve a
+    case eb of
+        NoEvent -> return (NoEvent, takeE n ve')
+        Event b -> return (Event b, takeE (n-1) ve')
 
 -- | Never produces any event values.
 never :: Monad m => Var m b (Event c)
@@ -254,6 +267,24 @@ andThenWith = go Nothing
               (e, w1') <- runVar w1 a
               case e of
                   NoEvent -> runVar (f mb) a
+                             {-let w2 = f mb
+                             in case mb of
+                                 -- This is a bit of a hack to keep
+                                 -- recursive vars from infinitely
+                                 -- recursing. If we keep playing the same
+                                 -- inhibiting signal with the same inputs
+                                 -- it will continue recursing. In order to
+                                 -- avoid that situation we are here using
+                                 -- the last known value for this step, and
+                                 -- will start producing with the new
+                                 -- signal at the next step, with the next
+                                 -- step's input value. There should be
+                                 -- a way to do this using some other
+                                 -- combinator 'onceAt' or 'at' ...
+                                 -- instead of putting this
+                                 -- here.
+                                 Nothing -> runVar w2 a
+                                 Just b  -> return (b, w2)-}
                   Event b -> return $ (b, go (Just b) w1' f)
 --------------------------------------------------------------------------------
 -- Operations on Events

@@ -98,5 +98,5 @@ tween f start end dur = proc dt -> do
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Monad m, Ord t, Num t, Fractional t) => t -> Var m t t
 timeAsPercentageOf t = proc dt -> do
-    t' <- foldWith (+) 0 -< dt
+    t' <- accumulate (+) 0 -< dt
     returnA -< min 1 (t' / t)
