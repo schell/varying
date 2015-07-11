@@ -3,7 +3,7 @@
 module Control.Varying.Time where
 
 import Control.Varying.Core
-import Control.Varying.Event hiding (after)
+import Control.Varying.Event hiding (after, before)
 import Control.Concurrent
 import Data.Time.Clock
 
@@ -28,7 +28,7 @@ delayThread t = Var $ \b -> do
 --------------------------------------------------------------------------------
 -- Using timed events
 --------------------------------------------------------------------------------
--- | Emits events before accumulating == t input.
+-- | Emits events before accumulating t of input dt.
 -- Note that as soon as we have accumulated >= t we stop emitting events
 -- and there is no guarantee that an event will be emitted at time == t.
 before :: (Monad m, Num t, Ord t) => t -> Var m t (Event ())

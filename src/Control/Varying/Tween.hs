@@ -4,7 +4,7 @@
 module Control.Varying.Tween where
 
 import Control.Varying.Core
-import Control.Varying.Event hiding (after)
+import Control.Varying.Event hiding (after, before)
 import Control.Varying.Time
 import Control.Arrow
 
@@ -79,6 +79,12 @@ type Tween m t = t -> t -> t -> Var m t (Event t)
 constant :: (Monad m, Num t, Ord t) => a -> t -> Var m t (Event a)
 constant value duration = use value $ before duration
 
+-- | A tween takes a time delta as input and produces an event value of
+-- some interpolation between a start and end value over a duration.
+--
+-- Keep in mind `tween` must be fed time deltas, not absolute time or
+-- duration. This is mentioned because the author has made that mistake
+-- more than once ;)
 tween :: (Monad m, Fractional t, Ord t) => Easing t -> t -> t -> t -> Var m t (Event t)
 tween f start end dur = proc dt -> do
     -- Current time as percentage / amount of interpolation (0.0 - 1.0)

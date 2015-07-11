@@ -27,6 +27,10 @@ module Control.Varying.Event (
     between,
     until,
     after,
+    beforeWith,
+    beforeOne,
+    before,
+    filterE,
     takeE,
     once,
     always,
@@ -204,6 +208,29 @@ after vb ve = Var $ \a -> do
         Event _ -> return (NoEvent, toEvent vb')
         NoEvent -> return (NoEvent, vb' `after` ve')
 
+-- | Like before, but use the value produced by the switching stream to
+-- create a stream to switch to.
+beforeWith :: Monad m
+           => Var m a b
+           -> (Var m a (Event b), b -> Var m a (Event b))
+           -> Var m a (Event b)
+beforeWith vb (ve, f) = Var $ \a -> do
+    (b, vb') <- runVar vb a
+    (e, ve') <- runVar ve a
+    case e of
+        Event b' -> runVar (f b') a
+        NoEvent  -> return (Event b, beforeWith vb' (ve', f))
+
+-- | Like before, but sample the value of the second stream once before
+-- inhibiting.
+beforeOne :: Monad m => Var m a b -> Var m a (Event b) -> Var m a (Event b)
+beforeOne vb ve = Var $ \a -> do
+    (b, vb') <- runVar vb a
+    (e, ve') <- runVar ve a
+    case e of
+        Event b' -> return (Event b', never)
+        NoEvent  -> return (Event b, vb' `beforeOne` ve')
+
 -- | Produce events with the initial varying value only before the second stream
 -- has produced one event.
 before :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
@@ -230,6 +257,12 @@ takeE n ve = Var $ \a -> do
     case eb of
         NoEvent -> return (NoEvent, takeE n ve')
         Event b -> return (Event b, takeE (n-1) ve')
+
+-- | Inhibit all events that don't pass the predicate.
+filterE :: Monad m => (b -> Bool) -> Var m a (Event b) -> Var m a (Event b)
+filterE p v = v ~> var check
+    where check (Event b) = if p b then Event b else NoEvent
+          check _ = NoEvent
 
 -- | Never produces any event values.
 never :: Monad m => Var m b (Event c)

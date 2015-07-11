@@ -10,7 +10,10 @@ import Debug.Trace
 data Var m b c = Var { runVar :: b -> m (c, Var m b c) }
 
 vtrace :: (Applicative a, Show b) => Var a b b
-vtrace = var $ \b -> trace (show b) b
+vtrace = vstrace ""
+
+vstrace :: (Applicative a, Show b) => String -> Var a b b
+vstrace s = var $ \b -> trace (s ++ show b) b
 
 var :: Applicative a => (b -> c) -> Var a b c
 var f = Var $ \a -> pure $ (f a, var f)
