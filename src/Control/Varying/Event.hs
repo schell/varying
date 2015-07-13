@@ -39,12 +39,17 @@ module Control.Varying.Event (
     andThen,
     andThenWith,
     andThenE,
+    switchByMode,
+    -- * Combining event streams
+    combineWith,
+    combine
 ) where
 
 import Prelude hiding (until)
 import Control.Varying.Core
 import Control.Applicative
 import Control.Arrow
+import Control.Monad
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values.
 --------------------------------------------------------------------------------
@@ -133,12 +138,11 @@ onJust = var $ \ma -> case ma of
 
 -- | Triggers an `Event a` when the input is a unique value.
 onUnique :: (Monad m, Eq a) => Var m a (Event a)
-onUnique = trigger NoEvent
-    where trigger NoEvent   = Var $ \a  -> return (Event a, trigger $ Event a)
-          trigger (Event a) = Var $ \a' -> let e = if a == a'
-                                                      then Event a
-                                                      else Event a'
-                                             in return (e, trigger e)
+onUnique = Var $ \a -> return (Event a, trigger a)
+    where trigger a' = Var $ \a'' -> let e = if a' == a''
+                                             then NoEvent
+                                             else Event a''
+                                   in return (e, trigger a'')
 
 -- | Triggers an `Event a` when the condition is met.
 onWhen :: Applicative m => (a -> Bool) -> Var m a (Event a)
@@ -264,6 +268,10 @@ filterE p v = v ~> var check
     where check (Event b) = if p b then Event b else NoEvent
           check _ = NoEvent
 
+-- | Produce events of a stream only when both streams produce events.
+
+-- | Combine simultaneous events.
+
 -- | Never produces any event values.
 never :: Monad m => Var m b (Event c)
 never = pure NoEvent
@@ -274,7 +282,7 @@ never = pure NoEvent
 always :: Monad m => b -> Var m a (Event b)
 always = pure . Event
 --------------------------------------------------------------------------------
--- Switching yarn on events
+-- Switching on events
 --------------------------------------------------------------------------------
 -- | Produces the first yarn's Event values until that stops producing, then
 -- switches to the second yarn.
@@ -319,6 +327,36 @@ andThenWith = go Nothing
                                  Nothing -> runVar w2 a
                                  Just b  -> return (b, w2)-}
                   Event b -> return $ (b, go (Just b) w1' f)
+
+-- | Switches using a mode signal. Signals maintain state for the duration
+-- of the mode.
+switchByMode :: (Monad m, Eq b) => Var m a b -> (b -> Var m a c) -> Var m a c
+switchByMode switch f = Var $ \a -> do
+    (b, _) <- runVar switch a
+    (_, v) <- runVar (f b) a
+    runVar (switchOnUnique v $ switch ~> onUnique) a
+        where switchOnUnique v sv = Var $ \a -> do
+                  (eb, sv') <- runVar sv a
+                  (c', v')  <- runVar (vOf eb) a
+                  return $ (c', switchOnUnique v' sv')
+                      where vOf eb = case eb of
+                                         NoEvent -> v
+                                         Event b -> f b
+
+--------------------------------------------------------------------------------
+-- Combining event streams
+--------------------------------------------------------------------------------
+-- | Combine two events streams into one event stream. Like `combine` but
+-- uses a combining function (instead of (,)).
+combineWith :: Monad m
+            => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c)
+            -> Var m a (Event d)
+combineWith f vb vc = (uncurry f <$>) <$> (combine vb vc)
+
+-- | Combine two event streams into an event stream of tuples. A tuple is
+-- only produced when both event streams produce a value.
+combine :: Monad m => Var m a (Event b) -> Var m a (Event c) -> Var m a (Event (b,c))
+combine vb vc = (\eb ec -> (,) <$> eb <*> ec) <$> vb <*> vc
 --------------------------------------------------------------------------------
 -- Operations on Events
 --------------------------------------------------------------------------------
@@ -345,6 +383,8 @@ instance Num a => Num (Event a) where
     abs = fmap abs
     signum = fmap signum
     fromInteger = pure . fromInteger
+
+instance MonadPlus Event
 
 instance Monad Event where
    return = Event
