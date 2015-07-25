@@ -1,7 +1,7 @@
 module Main where
 
-import Varying
-import Event
+import Control.Varying
+import Control.Varying.Event
 import System.IO
 import Data.IORef
 import Data.List

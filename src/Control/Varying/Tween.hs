@@ -1,3 +1,7 @@
+-- | Module:     Control.Varying.Tween
+--   Copyright:  (c) 2015 Schell Scivally
+--   License:    MIT
+--   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE Rank2Types #-}
@@ -76,16 +80,26 @@ linear c t b = c * t + b
 type Easing t = t -> t -> t -> t
 type Tween m t = t -> t -> t -> Var m t (Event t)
 
+-- | Perform no interpolation over the duration, just sample at a constant
+-- value.
 constant :: (Monad m, Num t, Ord t) => a -> t -> Var m t (Event a)
 constant value duration = use value $ before duration
 
--- | A tween takes a time delta as input and produces an event value of
--- some interpolation between a start and end value over a duration.
+-- | Produces an event sample interpolated between a start and end value
+-- using an easing equation ('Easing') over a duration. The resulting 'Var' will
+-- take a time delta as input. For example:
+--
+-- @
+-- testWhile_ isEvent v
+--    where v :: Var IO a (Event Double)
+--          v = deltaUTC ~> tween easeOutExpo 0 100 5
+-- @
 --
 -- Keep in mind `tween` must be fed time deltas, not absolute time or
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
-tween :: (Monad m, Fractional t, Ord t) => Easing t -> t -> t -> t -> Var m t (Event t)
+tween :: (Monad m, Fractional t, Ord t)
+      => Easing t -> t -> t -> t -> Var m t (Event t)
 tween f start end dur = proc dt -> do
     -- Current time as percentage / amount of interpolation (0.0 - 1.0)
     t <- timeAsPercentageOf dur -< dt
@@ -100,6 +114,12 @@ tween f start end dur = proc dt -> do
 
     -- Tag the event with the value.
     returnA -< x <$ e
+
+test :: IO ()
+test =
+ testWhile_ isEvent v
+    where v :: Var IO a (Event Double)
+          v = deltaUTC ~> tween easeOutExpo 0 100 5
 
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Monad m, Ord t, Num t, Fractional t) => t -> Var m t t

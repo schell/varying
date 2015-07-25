@@ -1,3 +1,7 @@
+-- | Module:     Control.Varying.Event
+--   Copyright:  (c) 2015 Schell Scivally
+--   License:    MIT
+--   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PartialTypeSignatures #-}
@@ -5,6 +9,7 @@ module Control.Varying.Event (
     Event(..),
     -- * Transforming event values.
     toMaybe,
+    isEvent,
     -- * Combining events and values
     latchWith,
     orE,
@@ -17,13 +22,14 @@ module Control.Varying.Event (
     onJust,
     onUnique,
     onWhen,
+    toEvent,
     -- * Using events
     collect,
     hold,
     holdWith,
     startingWith,
     startWith,
-    -- * Stream primitives
+    -- * Temporal operations
     between,
     until,
     after,
@@ -53,9 +59,16 @@ import Control.Monad
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values.
 --------------------------------------------------------------------------------
+-- | Turns an 'Event' into a 'Maybe'.
 toMaybe :: Event a -> Maybe a
 toMaybe (Event a) = Just a
 toMaybe _ = Nothing
+
+-- | Returns 'True' when the 'Event' contains a sample and 'False'
+-- otherwise.
+isEvent :: Event a -> Bool
+isEvent (Event _) = True
+isEvent _ = False
 --------------------------------------------------------------------------------
 -- Combining varying values and events
 --------------------------------------------------------------------------------
@@ -70,7 +83,9 @@ latchWith f vb vc = latchWith' (NoEvent, vb) vc
               Var $ \a -> do (eb', vb'') <- runVar vb' a
                              (ec', vc'') <- runVar vc' a
                              let eb'' = eb' <|> eb
-                             return $ (do f <$> eb'' <*> ec', latchWith' (eb'', vb'') vc'')
+                             return $ ( f <$> eb'' <*> ec'
+                                      , latchWith' (eb'', vb'') vc''
+                                      )
 
 
 -- | Produces values from the first unless the second produces event
@@ -173,8 +188,8 @@ collect = collectWith (:)
 -- @
 -- time ~> after 3 ~> startingWith 0
 -- @
--- This is similar to `hold` except that it takes events from its input value
--- instead of another yarn.
+-- This is similar to 'hold' except that it takes events from its input value
+-- instead of another 'Var'.
 startingWith, startWith :: Monad m => a -> Var m (Event a) a
 startingWith = startWith
 startWith a = Var $ \e ->
@@ -182,13 +197,13 @@ startWith a = Var $ \e ->
                  NoEvent  -> (a, startWith a)
                  Event a' -> (a', startWith a')
 
--- | Flipped version of `hold`.
+-- | Flipped version of 'hold'.
 holdWith :: Monad m => b -> Var m a (Event b) -> Var m a b
 holdWith = flip hold
 
--- | Produces the `initial` value until the given yarn produces an event.
+-- | Produces the 'initial' value until the given 'Var' produces an event.
 -- After an event is produced that event's value will be produced until the
--- next event produced by the given yarn.
+-- next event produced by the given 'Var'.
 hold :: Monad m => Var m a (Event b) -> b -> Var m a b
 hold w initial = Var $ \x -> do
     (mb, w') <- runVar w x
@@ -268,8 +283,8 @@ filterE p v = v ~> var check
     where check (Event b) = if p b then Event b else NoEvent
           check _ = NoEvent
 
+-- | TODO:
 -- | Produce events of a stream only when both streams produce events.
-
 -- | Combine simultaneous events.
 
 -- | Never produces any event values.
@@ -277,21 +292,20 @@ never :: Monad m => Var m b (Event c)
 never = pure NoEvent
 
 -- | Produces events with the initial value forever.
---always :: Monad m => Var m a b -> Var m a (Event b)
---always = (~> var Event)
 always :: Monad m => b -> Var m a (Event b)
 always = pure . Event
 --------------------------------------------------------------------------------
 -- Switching on events
 --------------------------------------------------------------------------------
--- | Produces the first yarn's Event values until that stops producing, then
--- switches to the second yarn.
+-- | Produces the first 'Var's Event values until that stops producing, then
+-- switches to the second 'Var'.
 andThen :: Monad m => Var m a (Event b) -> Var m a b -> Var m a b
 andThen w1 w2 = w1 `andThenWith` const w2
 
 -- | Switches from one event stream to another once the first stops
 -- producing.
-andThenE :: Monad m => Var m a (Event b) -> Var m a (Event b) -> Var m a (Event b)
+andThenE :: Monad m
+         => Var m a (Event b) -> Var m a (Event b) -> Var m a (Event b)
 andThenE y1 y2 = Var $ \a -> do
     (e, y1') <- runVar y1 a
     case e of
@@ -308,24 +322,6 @@ andThenWith = go Nothing
               (e, w1') <- runVar w1 a
               case e of
                   NoEvent -> runVar (f mb) a
-                             {-let w2 = f mb
-                             in case mb of
-                                 -- This is a bit of a hack to keep
-                                 -- recursive vars from infinitely
-                                 -- recursing. If we keep playing the same
-                                 -- inhibiting signal with the same inputs
-                                 -- it will continue recursing. In order to
-                                 -- avoid that situation we are here using
-                                 -- the last known value for this step, and
-                                 -- will start producing with the new
-                                 -- signal at the next step, with the next
-                                 -- step's input value. There should be
-                                 -- a way to do this using some other
-                                 -- combinator 'onceAt' or 'at' ...
-                                 -- instead of putting this
-                                 -- here.
-                                 Nothing -> runVar w2 a
-                                 Just b  -> return (b, w2)-}
                   Event b -> return $ (b, go (Just b) w1' f)
 
 -- | Switches using a mode signal. Signals maintain state for the duration
@@ -342,12 +338,11 @@ switchByMode switch f = Var $ \a -> do
                       where vOf eb = case eb of
                                          NoEvent -> v
                                          Event b -> f b
-
 --------------------------------------------------------------------------------
 -- Combining event streams
 --------------------------------------------------------------------------------
 -- | Combine two events streams into one event stream. Like `combine` but
--- uses a combining function (instead of (,)).
+-- uses a combining function instead of (,).
 combineWith :: Monad m
             => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c)
             -> Var m a (Event d)
@@ -355,7 +350,8 @@ combineWith f vb vc = (uncurry f <$>) <$> (combine vb vc)
 
 -- | Combine two event streams into an event stream of tuples. A tuple is
 -- only produced when both event streams produce a value.
-combine :: Monad m => Var m a (Event b) -> Var m a (Event c) -> Var m a (Event (b,c))
+combine :: Monad m
+        => Var m a (Event b) -> Var m a (Event c) -> Var m a (Event (b,c))
 combine vb vc = (\eb ec -> (,) <$> eb <*> ec) <$> vb <*> vc
 --------------------------------------------------------------------------------
 -- Operations on Events
@@ -405,4 +401,5 @@ instance Functor Event where
     fmap f (Event a) = Event $ f a
     fmap _ NoEvent = NoEvent
 
-data Event a = Event a | NoEvent
+-- | An Event is just like a Maybe.
+data Event a = Event a | NoEvent deriving (Eq)

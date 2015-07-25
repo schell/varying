@@ -1,12 +1,21 @@
+-- | Module:     Control.Varying.Time
+--   Copyright:  (c) 2015 Schell Scivally
+--   License:    MIT
+--   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE TupleSections #-}
 module Control.Varying.Time where
 
 import Control.Varying.Core
 import Control.Varying.Event hiding (after, before)
-import Control.Concurrent
 import Data.Time.Clock
 
+-- | Produces "time" deltas using 'getCurrentTime' and 'diffUTCTime'.
+deltaUTC :: Fractional t => Var IO b t
+deltaUTC = delta getCurrentTime (\a b -> realToFrac $ diffUTCTime a b)
+
+-- | Produces "time" deltas using a monadic computation and a difference
+-- function.
 delta :: (Num t, Fractional t, Monad m) => m a -> (a -> a -> t) -> Var m b t
 delta m f = Var $ \_ -> do
     t <- m
@@ -15,16 +24,6 @@ delta m f = Var $ \_ -> do
             t' <- m
             let dt = t' `f` t
             return (dt, delta' t')
-
-deltaUTC :: Fractional t => Var IO b t
-deltaUTC = delta getCurrentTime (\a b -> realToFrac $ diffUTCTime a b)
-
-delayThread :: Int -> Var IO b b
-delayThread t = Var $ \b -> do
-    threadDelay t
-    return (b, delayThread t)
-
-
 --------------------------------------------------------------------------------
 -- Using timed events
 --------------------------------------------------------------------------------
