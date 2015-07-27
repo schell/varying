@@ -103,7 +103,7 @@ accumulate f b = Var $ \a -> do
 -- | Delays the given 'Var' by one sample using a parameter as the first
 -- sample. This enables the programmer to create 'Var's that depend on
 -- themselves for values. For example:
--- > let v = 1 + delay 0 v in testVar_ v
+-- >  let v = 1 + delay 0 v in testVar_ v
 delay :: Monad m => b -> Var m a b -> Var m a b
 delay b v = Var $ \a -> return (b, go a v)
     where go a v' = Var $ \a' -> do (b', v'') <- runVar v' a
@@ -126,32 +126,58 @@ infixr 1 ~>
 --------------------------------------------------------------------------------
 -- Typeclass instances
 --------------------------------------------------------------------------------
--- | You can `fmap` the sample of any 'Var':
--- > fmap (*3) $ accumulate (+) 0
+-- | You can transform the sample value of any 'Var':
+--
+-- >  fmap (*3) $ accumulate (+) 0
 -- Will sum input values and then multiply the sum by 3.
 instance Monad m => Functor (Var m b) where
     fmap f' v = v ~> var f'
 
+-- | A very simple category instance.
+--
+-- @
+--   id = var id
+--   f . g = g ~> f
+-- @
+-- or
+--
+-- >  f . g = f <~ g
+--
+-- It is preferable for consistency (and readability) to use 'plug left' ('<~')
+-- and 'plug right' ('~>') instead of ('.') where possible.
 instance Monad m => Category (Var m) where
     id = var id
     f . g = g ~> f
 
--- | 'Var's are applicative!
--- > (,) <$> pure True <*> var "Applicative"
+-- | 'Var's are applicative.
+--
+-- >  (,) <$> pure True <*> var "Applicative"
 instance Monad m => Applicative (Var m a) where
     pure = var . const
     vf <*> va = Var $ \a -> do (f, vf') <- runVar vf a
                                (b, va') <- runVar va a
                                return $ (f b, vf' <*> va')
 
--- | 'Var's are arrows!
+-- | 'Var's are arrows, which means you can use proc notation.
+--
+-- @
+-- v = proc a -> do
+--       ex <- intEventVar -< ()
+--       ey <- anotherIntEventVar -< ()
+--       returnA -\< (+) \<$\> ex \<*\> ey
+-- @
+-- which is equivalent to
+--
+-- >  v = (\ex ey -> (+) <$> ex <*> ey) <$> intEventVar <*> anotherIntEventVar
 instance Monad m => Arrow (Var m) where
     arr = var
     first v = Var $ \(b,d) -> do (c, v') <- runVar v b
                                  return $ ((c,d), first v')
 
--- | 'Var's can be numbers:
--- > let v = 1 ~> accumulate (+) 0
+-- | 'Var's can be written as numbers.
+--
+-- >  let v = 1 ~> accumulate (+) 0
+-- which will sum the natural numbers.
 instance (Monad m, Num b) => Num (Var m a b) where
     (+) = liftA2 (+)
     (-) = liftA2 (-)
@@ -160,8 +186,10 @@ instance (Monad m, Num b) => Num (Var m a b) where
     signum = fmap signum
     fromInteger = pure . fromInteger
 
--- | 'Var's can be floating:
--- > let v = 2.5 ~> accumulate (+) 0
+-- | 'Var's can be written as floats.
+--
+-- >  let v = pi ~> accumulate (*) 0.0
+-- which will attempt (and succeed) to multiply pi by zero every step.
 instance (Monad m, Floating b) => Floating (Var m a b) where
     pi = pure pi
     exp = fmap exp
@@ -170,8 +198,10 @@ instance (Monad m, Floating b) => Floating (Var m a b) where
     cos = fmap cos; cosh = fmap cosh; acos = fmap acos; acosh = fmap acosh
     atan = fmap atan; atanh = fmap atanh
 
--- | 'Var's can be fractional:
--- > let v = 2.5 ~> accumulate (+) 0
+-- | 'Var's can be written as fractionals.
+--
+-- >  let v = 2.5 ~> accumulate (+) 0
+-- which will add 2.5 each step.
 instance (Monad m, Fractional b) => Fractional (Var m a b) where
     (/) = liftA2 (/)
     fromRational = pure . fromRational

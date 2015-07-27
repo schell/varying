@@ -10,14 +10,16 @@ name:                varying
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.0
+version:             0.1.0.1
 
 -- A short (one-line) description of the package.
-synopsis:            Various automaton based varying values.
+synopsis:            Automaton based varying values, event streams and tweening.
 
 -- A longer description of the package.
-description:         Automaton based varying values and continuous time varying
-                     values.
+description:         Varying is another FRP or LSP library aimed at providing a
+                     simple way to describe discrete or continuously varying
+                     values. It is capable of tweening out of the box and
+                     provides a small, well documented API.
 
 -- URL for the project homepage or repository.
 homepage:            https://github.com/schell/varying
@@ -78,3 +80,18 @@ library
   -- Base language which the package is written in.
   default-language:    Haskell2010
 
+executable varying-example
+  ghc-options:         -Wall
+
+  -- Other library packages from which modules are imported.
+  build-depends:       base >=4.8 && <4.9,
+                       time >=1.5 && <1.6
+
+
+  -- Directories containing source files.
+  hs-source-dirs:      src
+
+  main-is:             Example.hs
+
+  -- Base language which the package is written in.
+  default-language:    Haskell2010
