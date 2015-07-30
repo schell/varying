@@ -5,7 +5,7 @@ influenced by the [netwire](http://hackage.haskell.org/package/netwire) and
 [auto](http://hackage.haskell.org/package/auto) packages. Unlike netwire the 
 concepts of inhibition and time are explicit (through `Control.Varying.Event` 
 and `Control.Varying.Time`) and the library aims at being minimal and well 
-documented with a small API surface area.
+documented with a small API.
 
 Depending on your types and values varying can provide discrete or continuous
 time semantics.

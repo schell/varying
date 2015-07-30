@@ -1,8 +1,44 @@
--- | Module:     Control.Varying.Core
+-- |
+--   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
-module Control.Varying.Core where
+--
+--   Values that change over a given domain.
+--
+--   Varying values take some input (the domain ~ time, place, etc) and produce
+--   a sample and a new varying value. This pattern is known as an automaton.
+--   `varying` uses this pattern as its base type with the additon of a monadic
+--   computation to create locally stateful signals that change over some
+--   domain.
+module Control.Varying.Core (
+    Var(..),
+    -- * Creating varying values
+    -- $creation
+    var,
+    varM,
+    -- * Composing varying values
+    -- $composition
+    (<~),
+    (~>),
+    -- * Adjusting and accumulating
+    delay,
+    accumulate,
+    -- * Sampling varying values (running, entry points)
+    -- $running
+    evalVar,
+    execVar,
+    loopVar,
+    loopVar_,
+    whileVar,
+    whileVar_,
+    -- * Testing varying values
+    testVar,
+    testVar_,
+    testWhile_,
+    vtrace,
+    vstrace
+) where
 
 import Prelude hiding (id, (.))
 import Control.Arrow
@@ -10,7 +46,36 @@ import Control.Category
 import Control.Applicative
 import Debug.Trace
 --------------------------------------------------------------------------------
--- Constructing
+-- $creation
+-- You can create a pure varying value by lifting a function @(a -> b)@
+-- with 'var':
+--
+-- @
+-- addsOne :: Monad m => Var m Int Int
+-- addsOne = var (+1)
+-- @
+--
+-- 'var' is also equivalent to 'arr'.
+--
+-- You can create a monadic varying value by lifting a monadic computation
+-- @(a -> m b)@ using 'varM':
+--
+-- @
+-- getsFile :: Var IO FilePath String
+-- getsFile = varM readFile
+-- @
+--
+-- You can create either with the raw constructor. You can also create your
+-- own combinators using the raw constructor, as it allows you full control
+-- over how varying values are stepped and sampled:
+--
+-- @
+-- delay :: Monad m => b -> Var m a b -> Var m a b
+-- delay b v = Var $ \a -> return (b, go a v)
+--     where go a v' = Var $ \a' -> do (b', v'') <- runVar v' a
+--                                     return (b', go a' v'')
+-- @
+--
 --------------------------------------------------------------------------------
 -- | Lift a pure computation into a 'Var'.
 var :: Applicative a => (b -> c) -> Var a b c
@@ -22,8 +87,18 @@ varM f = Var $ \a -> do
     b <- f a
     return (b, varM f)
 --------------------------------------------------------------------------------
--- Running
+-- $running
+-- The easiest way to sample a 'Var' is to run it in the desired monad with
+-- 'runVar'. This will give you a sample value and a new 'Var' bundled up in a
+-- tuple:
+--
+-- > do (sample, v') <- runVar v inputValue
+--
+-- Much like Control.Monad.State there are other entry points for running
+-- varying values like 'evalVar', 'execVar'. There are also extra control
+-- structures like 'loopVar' and 'whileVar' and more.
 --------------------------------------------------------------------------------
+
 -- | Iterate a 'Var' once and return the sample value.
 evalVar :: Functor m => Var m a b -> a -> m b
 evalVar v a = fst <$> (runVar v a)
@@ -91,7 +166,7 @@ testVar v = loopVar_ $ varM (const $ putStrLn "input: ")
 testVar_ :: Show b => Var IO () b -> IO ()
 testVar_ v = loopVar_ $ pure () ~> v ~> varM print ~> varM (const $ getLine)
 --------------------------------------------------------------------------------
--- Composition and accumulation
+-- Adjusting and accumulating
 --------------------------------------------------------------------------------
 -- | Accumulates input values using a folding function and yields
 -- that accumulated value each sample.
@@ -103,12 +178,20 @@ accumulate f b = Var $ \a -> do
 -- | Delays the given 'Var' by one sample using a parameter as the first
 -- sample. This enables the programmer to create 'Var's that depend on
 -- themselves for values. For example:
--- >  let v = 1 + delay 0 v in testVar_ v
+--
+-- > let v = 1 + delay 0 v in testVar_ v
 delay :: Monad m => b -> Var m a b -> Var m a b
 delay b v = Var $ \a -> return (b, go a v)
     where go a v' = Var $ \a' -> do (b', v'') <- runVar v' a
                                     return (b', go a' v'')
-
+--------------------------------------------------------------------------------
+-- $composition
+-- You can compose varying values together using '~>' and '<~'. The "right plug"
+-- ('~>') takes the output from a varying value on the left and "plugs" it
+-- into the input of the varying value on the right. The "left plug" does
+-- the same thing only in the opposite direction. This allows you to write
+-- varying values that read naturally.
+--------------------------------------------------------------------------------
 -- | Same as '~>' with flipped parameters.
 (<~) :: Monad m => Var m b c -> Var m a b -> Var m a c
 (<~) = flip (~>)
@@ -210,9 +293,8 @@ instance (Monad m, Fractional b) => Fractional (Var m a b) where
 --------------------------------------------------------------------------------
 -- | The vessel of a varying value. A 'Var' is a structure that contains a value
 -- that changes over some input. That input could be time (Float, Double, etc)
--- or events or a stream of 'Char' - whatever. Similar to the
--- 'Control.Monad.State' monad.
--- A kind of Mealy machine (an automaton) with effects.
+-- or 'Control.Varying.Event.Event's or 'Char' - whatever.
+-- It's a kind of Mealy machine (an automaton) with effects.
 data Var m b c =
      Var { runVar :: b -> m (c, Var m b c)
                   -- ^ Given an input value, return a computation that

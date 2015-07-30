@@ -1,7 +1,16 @@
--- | Module:     Control.Varying.Event
+-- |
+--   Module:     Control.Varying.Event
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--
+--  'Event' streams describe things that happen at a specific time or place
+--  or value in general. For example, you can think of the event stream
+--  @Var IO Double (Event ())@ as an occurrence of `()` at a specific time
+--  (`Double`).
+--
+--  You can use 'Event' just like you would 'Maybe'.
+--
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE PartialTypeSignatures #-}
@@ -10,12 +19,12 @@ module Control.Varying.Event (
     -- * Transforming event values.
     toMaybe,
     isEvent,
-    -- * Combining events and values
+    -- * Combining event streams and value streams
     latchWith,
     orE,
     tagOn,
     tagM,
-    ringM,
+    --ringM,
     -- * Generating events from values
     use,
     onTrue,
@@ -23,13 +32,13 @@ module Control.Varying.Event (
     onUnique,
     onWhen,
     toEvent,
-    -- * Using events
+    -- * Using event streams
     collect,
     hold,
     holdWith,
     startingWith,
     startWith,
-    -- * Temporal operations
+    -- * Temporal operations (time - related)
     between,
     until,
     after,
@@ -73,8 +82,9 @@ isEvent _ = False
 -- Combining varying values and events
 --------------------------------------------------------------------------------
 -- | Holds the last value of one event stream while waiting for another event
--- stream to produce a value. Once both streams have produced a value combine
--- the two using the given combine function.
+-- stream to produce a value. Once both streams have produced a value, combine
+-- the two using the given combine function and emit an event with the
+-- value.
 latchWith :: Monad m
           => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c)
           -> Var m a (Event d)
@@ -86,7 +96,6 @@ latchWith f vb vc = latchWith' (NoEvent, vb) vc
                              return $ ( f <$> eb'' <*> ec'
                                       , latchWith' (eb'', vb'') vc''
                                       )
-
 
 -- | Produces values from the first unless the second produces event
 -- values and if so, produces the values of those events.
@@ -111,14 +120,14 @@ tagOn vb ve = proc a -> do
 -- previous event is used in a clean up function.
 --
 -- This is like `tagM` but performs a cleanup function first.
-ringM :: Monad m
-      => (c -> m ()) -> (b -> m c) -> Var m a (Event b) -> Var m a (Event c)
-ringM cln = (go (const $ return ()) .) . tagM
-    where go f ve = Var $ \a -> do (ec, ve') <- runVar ve a
-                                   case ec of
-                                       NoEvent -> return (ec, go f ve')
-                                       Event c -> do f c
-                                                     return (ec, go cln ve')
+--ringM :: Monad m
+--      => (c -> m ()) -> (b -> m c) -> Var m a (Event b) -> Var m a (Event c)
+--ringM cln = (go (const $ return ()) .) . tagM
+--    where go f ve = Var $ \a -> do (ec, ve') <- runVar ve a
+--                                   case ec of
+--                                       NoEvent -> return (ec, go f ve')
+--                                       Event c -> do f c
+--                                                     return (ec, go cln ve')
 
 -- | Injects a monadic computation into the events of `vb`, providing a way
 -- to perform side-effects inside an `Event` inside a `Var`.
@@ -401,5 +410,12 @@ instance Functor Event where
     fmap f (Event a) = Event $ f a
     fmap _ NoEvent = NoEvent
 
--- | An Event is just like a Maybe.
+-- | For all intents and purposes you can think of an Event as a Maybe.
+-- A value of @Event ()@ means that an event has occurred and that the
+-- result is a @()@. A value of @NoEvent@ means that an event did not
+-- occur.
+--
+-- Event streams (like @Var m a (Event b)@) describe events that may occur over
+-- varying @a@ (also known as the series of @a@). Usually @a@ would be some
+-- form of time or some user input type.
 data Event a = Event a | NoEvent deriving (Eq)
