@@ -34,6 +34,7 @@ module Control.Varying.Event (
     toEvent,
     -- * Using event streams
     collect,
+    collectWith,
     hold,
     holdWith,
     startingWith,
@@ -55,6 +56,8 @@ module Control.Varying.Event (
     andThenWith,
     andThenE,
     switchByMode,
+    onlyWhen,
+    onlyWhenE,
     -- * Combining event streams
     combineWith,
     combine
@@ -187,7 +190,8 @@ collectWith f = Var $ \a -> collect' mempty a
                                         Event a' -> f a' b
                           in return (b', Var $ \a' -> collect' b' a')
 
--- | Collect all produced values into a list.
+-- | Collect all produced values into a list. The latest event value will
+-- be at the head of the list.
 collect :: Monad m => Var m (Event a) [a]
 collect = collectWith (:)
 
@@ -347,6 +351,23 @@ switchByMode switch f = Var $ \a -> do
                       where vOf eb = case eb of
                                          NoEvent -> v
                                          Event b -> f b
+
+-- | Produce event values only when the input value passes the predicate.
+-- Maintains state when 'cold'.
+onlyWhen :: Monad m => Var m a b -> (a -> Bool) -> Var m a (Event b)
+onlyWhen v f = v `onlyWhenE` hot
+    where hot = var id ~> onWhen f
+
+-- | Produce event values from the first signal only when an event is
+-- produced by the second signal.
+-- Maintains state when 'cold'.
+onlyWhenE :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+onlyWhenE v hot = Var $ \a -> do
+    (e, hot') <- runVar hot a
+    if isEvent e
+    then do (b, v') <- runVar v a
+            return (Event b, onlyWhenE v' hot')
+    else return (NoEvent, onlyWhenE v hot')
 --------------------------------------------------------------------------------
 -- Combining event streams
 --------------------------------------------------------------------------------

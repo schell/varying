@@ -37,7 +37,8 @@ module Control.Varying.Core (
     testVar_,
     testWhile_,
     vtrace,
-    vstrace
+    vstrace,
+    vftrace,
 ) where
 
 import Prelude hiding (id, (.))
@@ -142,7 +143,12 @@ vtrace = vstrace ""
 -- | Trace the sample value of a 'Var' with a prefix and pass the sample along
 -- as output. This is very useful for debugging graphs of 'Var's.
 vstrace :: (Applicative a, Show b) => String -> Var a b b
-vstrace s = var $ \b -> trace (s ++ show b) b
+vstrace s = vftrace ((s ++) . show)
+
+-- | Trace the sample value after being run through a "show" function.
+-- This is very useful for debugging graphs of 'Var's.
+vftrace :: Applicative a => (b -> String) -> Var a b b
+vftrace f = var $ \b -> trace (f b) b
 
 -- | A utility function for testing 'Var's that don't require input. Runs
 -- a 'Var' printing each sample until the given predicate fails.
