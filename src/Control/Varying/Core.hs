@@ -109,7 +109,7 @@ execVar :: Functor m => Var m a b -> a -> m (Var m a b)
 execVar v a = snd <$> (runVar v a)
 
 -- | Loop over a 'Var' that takes no input value.
-loopVar_ :: Monad m => Var m () a -> m ()
+loopVar_ :: (Functor m, Monad m) => Var m () a -> m ()
 loopVar_ v = execVar v () >>= loopVar_
 
 -- | Loop over a 'Var' that produces its own next input value.
@@ -219,7 +219,7 @@ infixr 1 ~>
 --
 -- >  fmap (*3) $ accumulate (+) 0
 -- Will sum input values and then multiply the sum by 3.
-instance Monad m => Functor (Var m b) where
+instance (Applicative m, Monad m) => Functor (Var m b) where
     fmap f' v = v ~> var f'
 
 -- | A very simple category instance.
@@ -234,14 +234,14 @@ instance Monad m => Functor (Var m b) where
 --
 -- It is preferable for consistency (and readability) to use 'plug left' ('<~')
 -- and 'plug right' ('~>') instead of ('.') where possible.
-instance Monad m => Category (Var m) where
+instance (Applicative m, Monad m) => Category (Var m) where
     id = var id
     f . g = g ~> f
 
 -- | 'Var's are applicative.
 --
 -- >  (,) <$> pure True <*> var "Applicative"
-instance Monad m => Applicative (Var m a) where
+instance (Applicative m, Monad m) => Applicative (Var m a) where
     pure = var . const
     vf <*> va = Var $ \a -> do (f, vf') <- runVar vf a
                                (b, va') <- runVar va a
@@ -258,7 +258,7 @@ instance Monad m => Applicative (Var m a) where
 -- which is equivalent to
 --
 -- >  v = (\ex ey -> (+) <$> ex <*> ey) <$> intEventVar <*> anotherIntEventVar
-instance Monad m => Arrow (Var m) where
+instance (Applicative m, Monad m) => Arrow (Var m) where
     arr = var
     first v = Var $ \(b,d) -> do (c, v') <- runVar v b
                                  return $ ((c,d), first v')
