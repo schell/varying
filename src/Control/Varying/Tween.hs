@@ -54,6 +54,7 @@ import Control.Varying.Core
 import Control.Varying.Event hiding (after, before)
 import Control.Varying.Time
 import Control.Arrow
+import Control.Applicative
 
 --------------------------------------------------------------------------------
 -- $lerping
