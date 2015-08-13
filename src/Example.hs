@@ -2,6 +2,7 @@ module Main where
 
 import Control.Varying
 import Control.Varying.Time as Time -- time is not auto-exported
+import Control.Applicative
 import Text.Printf
 
 -- | A simple 2d point type.
@@ -22,7 +23,7 @@ backAndForth =
         <~ time
 
 -- An exponential tween back and forth from 0 to 100 over 2 seconds.
-tweenx :: Monad m => Var m Float Float
+tweenx :: (Applicative m, Monad m) => Var m Float Float
 tweenx =
     -- Tweens only happen for a certain duration and so their sample
     -- values have the type (Ord t, Fractional t => Event t). After construction
@@ -48,7 +49,7 @@ tweenx =
                  `andThen` tweenx
 
 -- A quadratic tween back and forth from 0 to 100 over 2 seconds.
-tweeny :: Monad m => Var m Float Float
+tweeny :: (Applicative m, Monad m) => Var m Float Float
 tweeny =
     tween easeOutQuad 0 100 1 `andThenE` tween easeOutQuad 100 0 1 `andThen` tweeny
 
