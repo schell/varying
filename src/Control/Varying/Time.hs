@@ -7,6 +7,7 @@ module Control.Varying.Time where
 
 import Control.Varying.Core
 import Control.Varying.Event hiding (after, before)
+import Control.Applicative
 import Data.Time.Clock
 
 -- | Produces "time" deltas using 'getCurrentTime' and 'diffUTCTime'.
