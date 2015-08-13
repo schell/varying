@@ -15,7 +15,6 @@
 --   dreams).
 
 --
-{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE Rank2Types #-}
 module Control.Varying.Tween (

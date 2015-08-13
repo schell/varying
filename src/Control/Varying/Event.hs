@@ -11,9 +11,6 @@
 --
 --  You can use 'Event' just like you would 'Maybe'.
 --
-{-# LANGUAGE Arrows #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE PartialTypeSignatures #-}
 module Control.Varying.Event (
     Event(..),
     -- * Transforming event values.
@@ -66,7 +63,6 @@ module Control.Varying.Event (
 import Prelude hiding (until)
 import Control.Varying.Core
 import Control.Applicative
-import Control.Arrow
 import Control.Monad
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values.
@@ -112,10 +108,7 @@ orE y ye = Var $ \a -> do
 
 -- | Injects the values of the `vb` into the events of `ve`.
 tagOn :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
-tagOn vb ve = proc a -> do
-    b <- vb -< a
-    e <- ve -< a
-    returnA -< b <$ e
+tagOn vb ve = (<$) <$> vb <*> ve
 
 -- | Injects a monadic computation into an event stream, using the event
 -- values of type `b` as a parameter to produce an event stream of type

@@ -2,7 +2,6 @@
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
-{-# LANGUAGE Arrows #-}
 {-# LANGUAGE TupleSections #-}
 module Control.Varying.Time where
 
