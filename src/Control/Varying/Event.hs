@@ -64,6 +64,7 @@ import Prelude hiding (until)
 import Control.Varying.Core
 import Control.Applicative
 import Control.Monad
+import Data.Monoid
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values.
 --------------------------------------------------------------------------------
