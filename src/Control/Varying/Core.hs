@@ -267,7 +267,7 @@ instance (Applicative m, Monad m) => Arrow (Var m) where
 --
 -- >  let v = 1 ~> accumulate (+) 0
 -- which will sum the natural numbers.
-instance (Monad m, Num b) => Num (Var m a b) where
+instance (Applicative m, Monad m, Num b) => Num (Var m a b) where
     (+) = liftA2 (+)
     (-) = liftA2 (-)
     (*) = liftA2 (*)
@@ -279,7 +279,7 @@ instance (Monad m, Num b) => Num (Var m a b) where
 --
 -- >  let v = pi ~> accumulate (*) 0.0
 -- which will attempt (and succeed) to multiply pi by zero every step.
-instance (Monad m, Floating b) => Floating (Var m a b) where
+instance (Applicative m, Monad m, Floating b) => Floating (Var m a b) where
     pi = pure pi
     exp = fmap exp
     log = fmap log
@@ -291,7 +291,7 @@ instance (Monad m, Floating b) => Floating (Var m a b) where
 --
 -- >  let v = 2.5 ~> accumulate (+) 0
 -- which will add 2.5 each step.
-instance (Monad m, Fractional b) => Fractional (Var m a b) where
+instance (Applicative m, Monad m, Fractional b) => Fractional (Var m a b) where
     (/) = liftA2 (/)
     fromRational = pure . fromRational
 --------------------------------------------------------------------------------
