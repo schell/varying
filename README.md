@@ -1,4 +1,7 @@
 # varying
+
+[![Build Status](https://travis-ci.org/schell/varying?branch=master)](https://travis-ci.org/schell/varying)
+
 This library provides automaton based varying values useful for both functional
 reactive programming (FRP) and locally stateful programming (LSP). It is 
 influenced by the [netwire](http://hackage.haskell.org/package/netwire) and 

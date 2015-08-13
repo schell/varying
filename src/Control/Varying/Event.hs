@@ -296,10 +296,6 @@ filterE p v = v ~> var check
     where check (Event b) = if p b then Event b else NoEvent
           check _ = NoEvent
 
--- | TODO:
--- | Produce events of a stream only when both streams produce events.
--- | Combine simultaneous events.
-
 -- | Never produces any event values.
 never :: Monad m => Var m b (Event c)
 never = pure NoEvent
@@ -352,16 +348,23 @@ switchByMode switch f = Var $ \a -> do
                                          NoEvent -> v
                                          Event b -> f b
 
--- | Produce event values only when the input value passes the predicate.
--- Maintains state when 'cold'.
-onlyWhen :: Monad m => Var m a b -> (a -> Bool) -> Var m a (Event b)
+-- | Produce events of a varying value 'v' only when its input value passes a
+-- predicate 'f'.
+-- 'v' maintains state while cold.
+onlyWhen :: Monad m
+         => Var m a b -- ^ 'v' - The varying value
+         -> (a -> Bool) -- ^ 'f' - The predicate to run on 'v''s input values.
+         -> Var m a (Event b)
 onlyWhen v f = v `onlyWhenE` hot
     where hot = var id ~> onWhen f
 
--- | Produce event values from the first signal only when an event is
--- produced by the second signal.
--- Maintains state when 'cold'.
-onlyWhenE :: Monad m => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+-- | Produce events of a varying value 'v' only when an event stream 'h'
+-- produces an event.
+-- 'v' and 'h' maintain state while cold.
+onlyWhenE :: Monad m
+          => Var m a b -- ^ 'v' - The varying value
+          -> Var m a (Event c) -- ^ 'h' - The event stream
+          -> Var m a (Event b)
 onlyWhenE v hot = Var $ \a -> do
     (e, hot') <- runVar hot a
     if isEvent e
