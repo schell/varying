@@ -21,9 +21,9 @@ module Control.Varying.Tween (
     -- * Creating tweens
     -- $creation
     tween,
+    constant,
     -- * Interpolation functions
     -- $lerping
-    constant,
     linear,
     easeInCirc,
     easeOutCirc,
@@ -152,11 +152,6 @@ easeInOut ein eout c t b = if t >= 0.5 then ein c t b else eout c t b
 linear :: Num t => Easing t
 linear c t b = c * t + b
 
--- | Ease none.
--- This performs no interpolation over the duration, it just samples at a
--- constant value until the duration is up.
-constant :: (Monad m, Num t, Ord t) => a -> t -> Var m t (Event a)
-constant value duration = use value $ before duration
 --------------------------------------------------------------------------------
 -- $creation
 --
@@ -188,7 +183,7 @@ constant value duration = use value $ before duration
 -- Keep in mind `tween` must be fed time deltas, not absolute time or
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
-tween :: (Monad m, Fractional t, Ord t)
+tween :: (Applicative m, Monad m, Fractional t, Ord t)
       => Easing t -> t -> t -> t -> Var m t (Event t)
 tween f start end dur = proc dt -> do
     -- Current time as percentage / amount of interpolation (0.0 - 1.0)
@@ -202,8 +197,14 @@ tween f start end dur = proc dt -> do
     -- Tag the event with the value.
     returnA -< x <$ e
 
+-- Creates a tween that performs no interpolation over the duration.
+constant :: (Applicative m, Monad m, Num t, Ord t)
+         => a -> t -> Var m t (Event a)
+constant value duration = use value $ before duration
+
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
-timeAsPercentageOf :: (Monad m, Ord t, Num t, Fractional t) => t -> Var m t t
+timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)
+                   => t -> Var m t t
 timeAsPercentageOf t = proc dt -> do
     t' <- accumulate (+) 0 -< dt
     returnA -< min 1 (t' / t)
