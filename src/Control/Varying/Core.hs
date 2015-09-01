@@ -45,6 +45,7 @@ import Prelude hiding (id, (.))
 import Control.Arrow
 import Control.Category
 import Control.Applicative
+import Data.Monoid
 import Debug.Trace
 --------------------------------------------------------------------------------
 -- $creation
