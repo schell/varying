@@ -263,6 +263,13 @@ instance (Applicative m, Monad m) => Arrow (Var m) where
     first v = Var $ \(b,d) -> do (c, v') <- runVar v b
                                  return $ ((c,d), first v')
 
+-- | 'Var's can be monoids
+--
+-- > let v = var (const "Hello ") `mappend` var (const "World!")
+instance (Applicative m, Monad m, Monoid b) => Monoid (Var m a b) where
+    mempty = pure mempty
+    mappend = liftA2 mappend
+
 -- | 'Var's can be written as numbers.
 --
 -- >  let v = 1 ~> accumulate (+) 0
