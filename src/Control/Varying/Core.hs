@@ -17,6 +17,7 @@ module Control.Varying.Core (
     -- $creation
     var,
     varM,
+    mkState,
     -- * Composing varying values
     -- $composition
     (<~),
@@ -88,6 +89,15 @@ varM :: Monad m => (a -> m b) -> Var m a b
 varM f = Var $ \a -> do
     b <- f a
     return (b, varM f)
+
+-- | Create a 'Var' from a state transformer.
+mkState :: Monad m
+        => (a -> s -> (b, s)) -- ^ state transformer
+        -> s -- ^ intial state
+        -> Var m a b
+mkState f s = Var $ \a -> do
+  let (b', s') = f a s
+  return (b', mkState f s')
 --------------------------------------------------------------------------------
 -- $running
 -- The easiest way to sample a 'Var' is to run it in the desired monad with
