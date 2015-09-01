@@ -45,6 +45,7 @@ import Prelude hiding (id, (.))
 import Control.Arrow
 import Control.Category
 import Control.Applicative
+import Data.Monoid
 import Debug.Trace
 --------------------------------------------------------------------------------
 -- $creation
@@ -262,6 +263,13 @@ instance (Applicative m, Monad m) => Arrow (Var m) where
     arr = var
     first v = Var $ \(b,d) -> do (c, v') <- runVar v b
                                  return $ ((c,d), first v')
+
+-- | 'Var's can be monoids
+--
+-- > let v = var (const "Hello ") `mappend` var (const "World!")
+instance (Applicative m, Monad m, Monoid b) => Monoid (Var m a b) where
+    mempty = pure mempty
+    mappend = liftA2 mappend
 
 -- | 'Var's can be written as numbers.
 --
