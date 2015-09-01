@@ -1,5 +1,5 @@
 # varying
-
+[![Hackage](https://img.shields.io/hackage/v/varying.svg)](http://hackage.haskell.org/package/varying)
 [![Build Status](https://travis-ci.org/schell/varying.svg)](https://travis-ci.org/schell/varying)
 
 This library provides automaton based varying values useful for both functional
