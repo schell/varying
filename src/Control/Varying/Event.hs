@@ -30,6 +30,7 @@ module Control.Varying.Event (
     onWhen,
     toEvent,
     -- * Using event streams
+    foldStream,
     collect,
     collectWith,
     hold,
@@ -186,6 +187,14 @@ collectWith f = Var $ \a -> collect' mempty a
                                         NoEvent -> b
                                         Event a' -> f a' b
                           in return (b', Var $ \a' -> collect' b' a')
+
+-- | Like a left fold over all the stream's produced values.
+foldStream :: Monad m => (a -> t -> a) -> a -> Var m (Event t) a
+foldStream f acc = Var $ \e -> do
+    case e of
+        Event a -> let acc' = f acc a
+                   in return (acc', foldStream f acc')
+        NoEvent -> return (acc, foldStream f acc)
 
 -- | Collect all produced values into a list. The latest event value will
 -- be at the head of the list.
