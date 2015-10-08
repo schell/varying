@@ -46,6 +46,7 @@ module Control.Varying.Event (
     before,
     filterE,
     takeE,
+    dropE,
     once,
     always,
     never,
@@ -274,17 +275,17 @@ beforeOne vb ve = Var $ \a -> do
 -- | Produce events with the initial varying value only before the second stream
 -- has produced one event.
 before :: (Applicative m, Monad m) => Var m a b -> Var m a (Event c) -> Var m a (Event b)
-before = until
-
--- | Produce events with the initial varying value until the input event stream
--- `ve` produces its first event, then never produce any events.
-until :: (Applicative m, Monad m) => Var m a b -> Var m a (Event c) -> Var m a (Event b)
-until vb ve = Var $ \a -> do
+before vb ve = Var $ \a -> do
     (b, vb') <- runVar vb a
     (e, ve') <- runVar ve a
     case e of
         Event _ -> return (NoEvent, never)
-        NoEvent -> return (Event b, vb' `until` ve')
+        NoEvent -> return (Event b, vb' `before` ve')
+
+-- | Produce events with the initial varying value until the input event stream
+-- `ve` produces its first event, then never produce any events.
+until :: (Applicative m, Monad m) => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+until = before
 
 -- | Produce the given value once and then inhibit forever.
 once :: (Applicative m, Monad m) => b -> Var m a (Event b)
@@ -292,11 +293,21 @@ once b = Var $ \_ -> return (Event b, never)
 
 -- | Stream through some number of successful events and then inhibit forever.
 takeE :: (Applicative m, Monad m) => Int -> Var m a (Event b) -> Var m a (Event b)
+takeE 0 _ = never
 takeE n ve = Var $ \a -> do
     (eb, ve') <- runVar ve a
     case eb of
         NoEvent -> return (NoEvent, takeE n ve')
         Event b -> return (Event b, takeE (n-1) ve')
+
+-- | Inhibit the first n occurences of an event.
+dropE :: (Applicative m, Monad m) => Int -> Var m a (Event b) -> Var m a (Event b)
+dropE 0 ve = ve
+dropE n ve = Var $ \a -> do
+    (eb, ve') <- runVar ve a
+    case eb of
+        NoEvent -> return (NoEvent, dropE n ve')
+        Event _ -> return (NoEvent, dropE (n-1) ve')
 
 -- | Inhibit all events that don't pass the predicate.
 filterE :: (Applicative m, Monad m) => (b -> Bool) -> Var m a (Event b) -> Var m a (Event b)
