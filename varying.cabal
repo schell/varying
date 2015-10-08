@@ -65,7 +65,8 @@ library
                        Control.Varying.Core,
                        Control.Varying.Time,
                        Control.Varying.Event,
-                       Control.Varying.Tween
+                       Control.Varying.Tween,
+                       Control.Varying.Step
 
   -- Modules included in this library but not exported.
   -- other-modules:
