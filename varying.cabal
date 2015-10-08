@@ -66,7 +66,7 @@ library
                        Control.Varying.Time,
                        Control.Varying.Event,
                        Control.Varying.Tween,
-                       Control.Varying.Step
+                       Control.Varying.Spline
 
   -- Modules included in this library but not exported.
   -- other-modules:
@@ -76,7 +76,8 @@ library
 
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.7 && <4.9,
-                       time >=1.5 && <1.6
+                       time >=1.5 && <1.6,
+                       transformers >= 0.4 && <0.5
 
   -- Directories containing source files.
   hs-source-dirs:      src
