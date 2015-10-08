@@ -13,8 +13,8 @@ module Control.Varying.Spline (
     evalSpline,
     execSpline,
     spline,
-    spline_,
-    splineIO
+    varyUntilEvent,
+    varyUntilEvent_
 ) where
 
 import Control.Varying.Core
@@ -87,11 +87,11 @@ instance (Monad m, Monoid b) => Monad (Spline m a b) where
             NoEvent -> return (Step b NoEvent, runSpline $ Spline v' >>= f)
             Event x -> runVar (runSpline $ f x) i
 
-splineIO :: (MonadIO m, Monoid b) => IO c -> Spline m a b c
-splineIO f = Spline $ Var $ \_ -> do
-    c <- liftIO f
-    let n = Step mempty (Event c)
-    return (n, pure n)
+instance (MonadIO m, Monoid b) => MonadIO (Spline m a b) where
+    liftIO f = Spline $ Var $ \_ -> do
+        c <- liftIO f
+        let n = Step mempty (Event c)
+        return (n, pure n)
 
 execSpline :: Monad m => Spline m a b c -> Var m a b
 execSpline = (stepIter <$>) . runSpline
@@ -99,17 +99,26 @@ execSpline = (stepIter <$>) . runSpline
 evalSpline :: Monad m => Spline m a b c -> Var m a (Event c)
 evalSpline = (stepEvent <$>) . runSpline
 
-spline :: Monad m
-       => Var m a b -> Var m a (Event c) -> (b -> c -> d) -> Spline m a b d
-spline v ve f = Spline $ Var $ \a -> do
+spline :: Monad m => x -> Var m a (Event x) -> Spline m a x x
+spline x ve = Spline $ Var $ \a -> do
+    (ex, ve') <- runVar ve a
+    case ex of
+        NoEvent  -> let n = Step x (Event x) in return (n, pure n)
+        Event x' -> return (Step x' NoEvent, runSpline $ spline x' ve')
+
+varyUntilEvent :: Monad m
+               => Var m a b -> Var m a (Event c) -> (b -> c -> d)
+               -> Spline m a b d
+varyUntilEvent v ve f = Spline $ Var $ \a -> do
     (b, v') <- runVar v a
     (ec, ve') <- runVar ve a
     case ec of
-        NoEvent -> return (Step b NoEvent, runSpline $ spline v' ve' f)
+        NoEvent -> return (Step b NoEvent, runSpline $ varyUntilEvent v' ve' f)
         Event c -> let n = Step b (Event $ f b c)
                    in return (n, pure n)
 
-spline_ :: (Monad m, Monoid b)
-        => Var m a b -> Var m a (Event c) -> (b -> c -> d) -> Spline m a b ()
-spline_ v ve f = spline v ve f >> return ()
+varyUntilEvent_ :: (Monad m, Monoid b)
+                => Var m a b -> Var m a (Event c) -> (b -> c -> d)
+                -> Spline m a b ()
+varyUntilEvent_ v ve f = varyUntilEvent v ve f >> return ()
 

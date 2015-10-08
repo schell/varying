@@ -450,6 +450,14 @@ instance Applicative Event where
     (<*>) (Event f) (Event a) = Event $ f a
     (<*>) _ _ = NoEvent
 
+-- | Any event is a monoid that responds to mempty with NoEvent. It
+-- responds to mappend by always choosing the rightmost event. This means
+-- left events are replaced unless the right event is NoEvent.
+instance Monoid (Event a) where
+    mempty = NoEvent
+    mappend a NoEvent = a
+    mappend _ b = b
+
 instance Functor Event where
     fmap f (Event a) = Event $ f a
     fmap _ NoEvent = NoEvent
