@@ -39,7 +39,6 @@ module Control.Varying.Event (
     startWith,
     -- * Temporal operations (time - related)
     between,
-    until,
     after,
     beforeWith,
     beforeOne,
@@ -66,7 +65,6 @@ import Prelude hiding (until)
 import Control.Varying.Core
 import Control.Applicative
 import Control.Monad
-import Data.Monoid
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values.
 --------------------------------------------------------------------------------
@@ -90,14 +88,14 @@ isEvent _ = False
 latchWith :: (Applicative m, Monad m)
           => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c)
           -> Var m a (Event d)
-latchWith f vb vc = latchWith' (NoEvent, vb) vc
-    where latchWith' (eb, vb') vc' =
+latchWith f vb = latchWith' (NoEvent, vb)
+    where latchWith' (eb, vb') vc =
               Var $ \a -> do (eb', vb'') <- runVar vb' a
-                             (ec', vc'') <- runVar vc' a
+                             (ec', vc') <- runVar vc a
                              let eb'' = eb' <|> eb
-                             return $ ( f <$> eb'' <*> ec'
-                                      , latchWith' (eb'', vb'') vc''
-                                      )
+                             return ( f <$> eb'' <*> ec'
+                                    , latchWith' (eb'', vb'') vc'
+                                    )
 
 -- | Produces values from the first unless the second produces event
 -- values and if so, produces the values of those events.
@@ -191,7 +189,7 @@ collectWith f = Var $ \a -> collect' mempty a
 
 -- | Like a left fold over all the stream's produced values.
 foldStream :: Monad m => (a -> t -> a) -> a -> Var m (Event t) a
-foldStream f acc = Var $ \e -> do
+foldStream f acc = Var $ \e ->
     case e of
         Event a -> let acc' = f acc a
                    in return (acc', foldStream f acc')
@@ -272,9 +270,10 @@ beforeOne vb ve = Var $ \a -> do
         Event b' -> return (Event b', never)
         NoEvent  -> return (Event b, vb' `beforeOne` ve')
 
--- | Produce events with the initial varying value only before the second stream
--- has produced one event.
-before :: (Applicative m, Monad m) => Var m a b -> Var m a (Event c) -> Var m a (Event b)
+-- | Produce events of the initial varying value until the given event stream
+-- produces its first event, then inhibit forever.
+before :: (Applicative m, Monad m)
+       => Var m a b -> Var m a (Event c) -> Var m a (Event b)
 before vb ve = Var $ \a -> do
     (b, vb') <- runVar vb a
     (e, ve') <- runVar ve a
@@ -282,17 +281,13 @@ before vb ve = Var $ \a -> do
         Event _ -> return (NoEvent, never)
         NoEvent -> return (Event b, vb' `before` ve')
 
--- | Produce events with the initial varying value until the input event stream
--- `ve` produces its first event, then never produce any events.
-until :: (Applicative m, Monad m) => Var m a b -> Var m a (Event c) -> Var m a (Event b)
-until = before
-
 -- | Produce the given value once and then inhibit forever.
 once :: (Applicative m, Monad m) => b -> Var m a (Event b)
 once b = Var $ \_ -> return (Event b, never)
 
 -- | Stream through some number of successful events and then inhibit forever.
-takeE :: (Applicative m, Monad m) => Int -> Var m a (Event b) -> Var m a (Event b)
+takeE :: (Applicative m, Monad m)
+      => Int -> Var m a (Event b) -> Var m a (Event b)
 takeE 0 _ = never
 takeE n ve = Var $ \a -> do
     (eb, ve') <- runVar ve a
@@ -301,7 +296,8 @@ takeE n ve = Var $ \a -> do
         Event b -> return (Event b, takeE (n-1) ve')
 
 -- | Inhibit the first n occurences of an event.
-dropE :: (Applicative m, Monad m) => Int -> Var m a (Event b) -> Var m a (Event b)
+dropE :: (Applicative m, Monad m)
+      => Int -> Var m a (Event b) -> Var m a (Event b)
 dropE 0 ve = ve
 dropE n ve = Var $ \a -> do
     (eb, ve') <- runVar ve a
@@ -310,7 +306,8 @@ dropE n ve = Var $ \a -> do
         Event _ -> return (NoEvent, dropE (n-1) ve')
 
 -- | Inhibit all events that don't pass the predicate.
-filterE :: (Applicative m, Monad m) => (b -> Bool) -> Var m a (Event b) -> Var m a (Event b)
+filterE :: (Applicative m, Monad m)
+        => (b -> Bool) -> Var m a (Event b) -> Var m a (Event b)
 filterE p v = v ~> var check
     where check (Event b) = if p b then Event b else NoEvent
           check _ = NoEvent
@@ -338,7 +335,7 @@ andThenE y1 y2 = Var $ \a -> do
     (e, y1') <- runVar y1 a
     case e of
         NoEvent -> runVar y2 a
-        Event b -> return $ (Event b, y1' `andThenE` y2)
+        Event b -> return (Event b, y1' `andThenE` y2)
 
 -- | Switches from one event stream when that stream stops producing. A new
 -- stream is created using the last produced value (or `Nothing`) and used
@@ -350,7 +347,7 @@ andThenWith = go Nothing
               (e, w1') <- runVar w1 a
               case e of
                   NoEvent -> runVar (f mb) a
-                  Event b -> return $ (b, go (Just b) w1' f)
+                  Event b -> return (b, go (Just b) w1' f)
 
 -- | Switches using a mode signal. Signals maintain state for the duration
 -- of the mode.
@@ -363,7 +360,7 @@ switchByMode switch f = Var $ \a -> do
         where switchOnUnique v sv = Var $ \a -> do
                   (eb, sv') <- runVar sv a
                   (c', v')  <- runVar (vOf eb) a
-                  return $ (c', switchOnUnique v' sv')
+                  return (c', switchOnUnique v' sv')
                       where vOf eb = case eb of
                                          NoEvent -> v
                                          Event b -> f b
@@ -399,7 +396,7 @@ onlyWhenE v hot = Var $ \a -> do
 combineWith :: (Applicative m, Monad m)
             => (b -> c -> d) -> Var m a (Event b) -> Var m a (Event c)
             -> Var m a (Event d)
-combineWith f vb vc = (uncurry f <$>) <$> (combine vb vc)
+combineWith f vb vc = (uncurry f <$>) <$> combine vb vc
 
 -- | Combine two event streams into an event stream of tuples. A tuple is
 -- only produced when both event streams produce a value.

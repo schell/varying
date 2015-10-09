@@ -45,8 +45,8 @@ module Control.Varying.Core (
 import Prelude hiding (id, (.))
 import Control.Arrow
 import Control.Category
+import Control.Monad (when)
 import Control.Applicative
-import Data.Monoid
 import Debug.Trace
 --------------------------------------------------------------------------------
 -- $creation
@@ -82,7 +82,7 @@ import Debug.Trace
 --------------------------------------------------------------------------------
 -- | Lift a pure computation into a 'Var'.
 var :: Applicative a => (b -> c) -> Var a b c
-var f = Var $ \a -> pure $ (f a, var f)
+var f = Var $ \a -> pure (f a, var f)
 
 -- | Lift a monadic computation into a 'Var'.
 varM :: Monad m => (a -> m b) -> Var m a b
@@ -113,11 +113,11 @@ mkState f s = Var $ \a -> do
 
 -- | Iterate a 'Var' once and return the sample value.
 evalVar :: Functor m => Var m a b -> a -> m b
-evalVar v a = fst <$> (runVar v a)
+evalVar v a = fst <$> runVar v a
 
 -- | Iterate a 'Var' once and return the next 'Var'.
 execVar :: Functor m => Var m a b -> a -> m (Var m a b)
-execVar v a = snd <$> (runVar v a)
+execVar v a = snd <$> runVar v a
 
 -- | Loop over a 'Var' that takes no input value.
 loopVar_ :: (Functor m, Monad m) => Var m () a -> m ()
@@ -166,7 +166,7 @@ vftrace f = var $ \b -> trace (f b) b
 testWhile_ :: Show a => (a -> Bool) -> Var IO () a -> IO ()
 testWhile_ f v = do
     (a, v') <- runVar v ()
-    if f a then print a >> testWhile_ f v' else return ()
+    when (f a) $ print a >> testWhile_ f v'
 
 -- | A utility function for testing 'Var's that require input. The input
 -- must have a 'Read' instance. Use this in GHCI to step through your 'Var's
@@ -176,12 +176,12 @@ testVar v = loopVar_ $ varM (const $ putStrLn "input: ")
                     ~> varM (const getLine)
                     ~> var read
                     ~> v
-                    ~> varM (putStrLn . show)
+                    ~> varM print
 
 -- | A utility function for testing 'Var's that don't require input. Use
 -- this in GHCI to step through your 'Var's using the `return` key.
 testVar_ :: Show b => Var IO () b -> IO ()
-testVar_ v = loopVar_ $ pure () ~> v ~> varM print ~> varM (const $ getLine)
+testVar_ v = loopVar_ $ pure () ~> v ~> varM print ~> varM (const getLine)
 --------------------------------------------------------------------------------
 -- Adjusting and accumulating
 --------------------------------------------------------------------------------
@@ -221,7 +221,7 @@ infixl 1 <~
 (~>) v1 v2 = Var $ \a -> do
     (b, v1') <- runVar v1 a
     (c, v2') <- runVar v2 b
-    return $ (c, v1' ~> v2')
+    return (c, v1' ~> v2')
 infixr 1 ~>
 --------------------------------------------------------------------------------
 -- Typeclass instances
@@ -256,7 +256,7 @@ instance (Applicative m, Monad m) => Applicative (Var m a) where
     pure = var . const
     vf <*> va = Var $ \a -> do (f, vf') <- runVar vf a
                                (b, va') <- runVar va a
-                               return $ (f b, vf' <*> va')
+                               return (f b, vf' <*> va')
 
 -- | 'Var's are arrows, which means you can use proc notation.
 --
@@ -272,7 +272,7 @@ instance (Applicative m, Monad m) => Applicative (Var m a) where
 instance (Applicative m, Monad m) => Arrow (Var m) where
     arr = var
     first v = Var $ \(b,d) -> do (c, v') <- runVar v b
-                                 return $ ((c,d), first v')
+                                 return ((c,d), first v')
 
 -- | 'Var's can be monoids
 --

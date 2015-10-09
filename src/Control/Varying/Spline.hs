@@ -24,8 +24,8 @@ import Control.Monad.IO.Class
 -- | A discrete step in a continuous function. This is simply a type that
 -- discretely describes an eventual value on the right and an iteration
 -- value on the left.
-data Step b c = Step { stepIter  :: b
-                     , stepEvent :: (Event c)
+data Step b c = Step { stepIter  :: (Event b)
+                     , stepResult :: (Event c)
                      } deriving (Show, Eq)
 
 -- | A discrete step is a functor by applying a function to the contained
@@ -93,18 +93,18 @@ instance (MonadIO m, Monoid b) => MonadIO (Spline m a b) where
         let n = Step mempty (Event c)
         return (n, pure n)
 
-execSpline :: Monad m => Spline m a b c -> Var m a b
+execSpline :: Monad m => Spline m a b c -> Var m a (Event b)
 execSpline = (stepIter <$>) . runSpline
 
 evalSpline :: Monad m => Spline m a b c -> Var m a (Event c)
-evalSpline = (stepEvent <$>) . runSpline
+evalSpline = (stepResult <$>) . runSpline
 
 spline :: Monad m => x -> Var m a (Event x) -> Spline m a x x
 spline x ve = Spline $ Var $ \a -> do
     (ex, ve') <- runVar ve a
     case ex of
-        NoEvent  -> let n = Step x (Event x) in return (n, pure n)
-        Event x' -> return (Step x' NoEvent, runSpline $ spline x' ve')
+        NoEvent  -> let n = Step (Event x) (Event x) in return (n, pure n)
+        Event x' -> return (Step (Event x') NoEvent, runSpline $ spline x' ve')
 
 varyUntilEvent :: Monad m
                => Var m a b -> Var m a (Event c) -> (b -> c -> d)
@@ -113,8 +113,8 @@ varyUntilEvent v ve f = Spline $ Var $ \a -> do
     (b, v') <- runVar v a
     (ec, ve') <- runVar ve a
     case ec of
-        NoEvent -> return (Step b NoEvent, runSpline $ varyUntilEvent v' ve' f)
-        Event c -> let n = Step b (Event $ f b c)
+        NoEvent -> return (Step (Event b) NoEvent, runSpline $ varyUntilEvent v' ve' f)
+        Event c -> let n = Step (Event b) (Event $ f b c)
                    in return (n, pure n)
 
 varyUntilEvent_ :: (Monad m, Monoid b)
