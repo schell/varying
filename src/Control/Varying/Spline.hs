@@ -69,7 +69,7 @@ instance Monoid f => Applicative (Step f) where
 data SplineT m f a b c = SplineT { unSplineT :: Var m a (Step (f b) c) }
                        | SplineTConst c
 
-runSplineT :: (Monad m, Monoid (f b))
+runSplineT :: (Applicative m, Monad m, Monoid (f b))
            => SplineT m f a b c -> Var m a (Step (f b) c)
 runSplineT (SplineT v) = v
 runSplineT (SplineTConst x) = pure $ pure x
