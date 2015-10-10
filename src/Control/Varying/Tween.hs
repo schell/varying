@@ -18,6 +18,9 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE Rank2Types #-}
 module Control.Varying.Tween (
+    -- * Tweening with splines
+    -- $splines
+    tweenTo,
     -- * Creating tweens
     -- $creation
     tween,
@@ -52,10 +55,21 @@ module Control.Varying.Tween (
 
 import Control.Varying.Core
 import Control.Varying.Event hiding (after, before)
+import Control.Varying.Spline
 import Control.Varying.Time
 import Control.Arrow
 import Control.Applicative
 
+--------------------------------------------------------------------------------
+-- $splines
+-- The easiest way to tween is by using splines. A spline in this context is a
+-- numeric computation that is "smooth" over some domain. It is defined in
+-- a piecewise manner by sequencing other splines together using do-notation.
+--------------------------------------------------------------------------------
+-- |
+tweenTo :: (Applicative m, Monad m, Fractional t, Ord t)
+        => Easing t -> t -> t -> t -> Spline m t t t
+tweenTo f start end dur = spline start $ tween f start end dur
 --------------------------------------------------------------------------------
 -- $lerping
 -- These pure functions take a `c` (total change in value, ie end - start),
