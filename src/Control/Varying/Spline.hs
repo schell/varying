@@ -12,6 +12,7 @@
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections #-}
 module Control.Varying.Spline (
     Step(..),
     SplineT(..),
@@ -20,7 +21,8 @@ module Control.Varying.Spline (
     evalSplineT,
     execSplineT,
     spline,
-    varyUntilEvent
+    varyUntilEvent,
+    capture
 ) where
 
 import Control.Varying.Core
@@ -157,3 +159,15 @@ varyUntilEvent v ve f = SplineT $ Var $ \a -> do
         NoEvent -> return (Step (Event b) NoEvent, runSplineT $ varyUntilEvent v' ve' f)
         Event c -> let n = Step (Event b) (Event $ f b c)
                    in return (n, pure n)
+
+-- | Captures the spline's latest iteration value and tuples it with the
+-- spline's result value.
+capture :: (Applicative m, Monad m, Monoid (f b), Eq (f b))
+        => SplineT m f a b c -> SplineT m f a b (f b, c)
+capture (SplineTConst x) = SplineTConst (mempty, x)
+capture (SplineT v) = capture' mempty v
+    where capture' mb v' = SplineT $ Var $ \a -> do
+              (Step fb ec, v'') <- runVar v' a
+              let mb' = if fb == mempty then mb else fb
+                  ec' = (mb',) <$> ec
+              return (Step fb ec', runSplineT $ capture' mb' v'')
