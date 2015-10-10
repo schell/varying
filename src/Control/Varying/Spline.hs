@@ -27,6 +27,7 @@ import Control.Varying.Core
 import Control.Varying.Event
 import Control.Monad.IO.Class
 import Control.Applicative
+import Data.Monoid
 
 -- | A discrete step in a continuous function. This is simply a type that
 -- discretely describes an eventual value on the right and a monoidal iteration

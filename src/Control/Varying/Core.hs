@@ -47,6 +47,7 @@ import Control.Arrow
 import Control.Category
 import Control.Monad (when)
 import Control.Applicative
+import Data.Monoid
 import Debug.Trace
 --------------------------------------------------------------------------------
 -- $creation
