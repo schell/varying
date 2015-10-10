@@ -112,7 +112,8 @@ instance (Monoid (f b), Applicative m, Monad m) => Monad (SplineT m f a b) where
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value and
 -- uses 'mempty' to generate an empty iteration value.
-instance (Monoid (f b), MonadIO m) => MonadIO (SplineT m f a b) where
+instance (Monoid (f b), Functor m, Applicative m, MonadIO m)
+    => MonadIO (SplineT m f a b) where
     liftIO f = SplineT $ Var $ \_ -> do
         n <- (Step mempty . Event) <$> liftIO f
         return (n, pure n)
