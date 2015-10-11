@@ -30,24 +30,17 @@ module Control.Varying.Tween (
     linear,
     easeInCirc,
     easeOutCirc,
-    easeInOutCirc,
     easeInExpo,
     easeOutExpo,
-    easeInOutExpo,
     easeInSine,
     easeOutSine,
     easeInOutSine,
     easeInPow,
     easeOutPow,
-    easeInOutPow,
     easeInCubic,
     easeOutCubic,
-    easeInOutCubic,
     easeInQuad,
     easeOutQuad,
-    easeInOutQuad,
-    -- * Interpolation helpers
-    easeInOut,
     -- * Writing your own tweens
     Tween,
     Easing
@@ -76,10 +69,6 @@ easeInQuad c t b =  c * t*t + b
 easeOutQuad :: Num t => Easing t
 easeOutQuad c t b =  (-c) * (t * (t - 2)) + b
 
--- | Ease in and out quadratic.
-easeInOutQuad :: (Ord t, Fractional t) => Easing t
-easeInOutQuad = easeInOut easeInQuad easeOutQuad
-
 -- | Ease in cubic.
 easeInCubic :: Num t => Easing t
 easeInCubic c t b =  c * t*t*t + b
@@ -88,15 +77,6 @@ easeInCubic c t b =  c * t*t*t + b
 easeOutCubic :: Num t => Easing t
 easeOutCubic c t b =  let t' = t - 1 in c * (t'*t'*t' + 1) + b
 
--- | Ease in and out cubic.
-easeInOutCubic :: (Ord t, Fractional t) => Easing t
-easeInOutCubic = easeInOut easeInCubic easeOutCubic
-
--- | Ease in and out by some power.
-easeInOutPow :: (Fractional t, Ord t) => Int -> Easing t
-easeInOutPow p = easeInOut (easeInPow p) (easeOutPow p)
-
--- | Ease in by some power.
 easeInPow :: Num t => Int -> Easing t
 easeInPow power c t b =  c * (t^power) + b
 
@@ -130,10 +110,6 @@ easeInExpo c t b =  let e = 10 * (t - 1) in c * (2**e) + b
 easeOutExpo :: Floating t => Easing t
 easeOutExpo c t b =  let e = -10 * t in c * (-(2**e) + 1) + b
 
--- | Ease in and out exponential.
-easeInOutExpo :: (Ord t, Floating t) => Easing t
-easeInOutExpo = easeInOut easeInExpo easeOutExpo
-
 -- | Ease in circular.
 easeInCirc :: Floating t => Easing t
 easeInCirc c t b = let s = sqrt (1 - t*t) in -c * (s - 1) + b
@@ -143,14 +119,6 @@ easeOutCirc :: Floating t => Easing t
 easeOutCirc c t b = let t' = (t - 1)
                         s  = sqrt (1 - t'*t')
                     in c * s + b
-
--- | Ease in and out circular.
-easeInOutCirc :: (Ord t, Floating t) => Easing t
-easeInOutCirc = easeInOut easeInCirc easeOutCirc
-
--- | Ease in and out using the given easing equations.
-easeInOut :: (Ord t, Num t, Fractional t) => Easing t -> Easing t -> Easing t
-easeInOut ein eout c t b = if t >= 0.5 then ein c t b else eout c t b
 
 -- | Ease linear.
 linear :: Num t => Easing t

@@ -33,9 +33,11 @@ module Control.Varying (
     -- * Reexports
     module Control.Varying.Core,
     module Control.Varying.Event,
-    module Control.Varying.Tween
+    module Control.Varying.Tween,
+    module Control.Varying.Spline
 ) where
 
 import Control.Varying.Core
 import Control.Varying.Event
 import Control.Varying.Tween
+import Control.Varying.Spline

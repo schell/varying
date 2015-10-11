@@ -18,8 +18,8 @@ synopsis:            FRP through varying values and monadic splines.
 -- A longer description of the package.
 description:         Varying is a FRP implentation aimed at providing a
                      simple way to describe values that change over some domain.
-                     It has convenience functions for tweening and aims to have
-                     a well documented API.
+                     It allows monadic, applicative or arrow notation and has
+                     convenience functions for tweening.
 
 -- URL for the project homepage or repository.
 homepage:            https://github.com/schell/varying
