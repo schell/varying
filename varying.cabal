@@ -10,16 +10,16 @@ name:                varying
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.4.0
+version:             0.1.5.0
 
 -- A short (one-line) description of the package.
-synopsis:            Automaton based varying values, event streams and tweening.
+synopsis:            FRP through varying values and monadic splines.
 
 -- A longer description of the package.
-description:         Varying is another FRP or LSP library aimed at providing a
-                     simple way to describe discrete or continuously varying
-                     values. It is capable of tweening out of the box and
-                     provides a small, well documented API.
+description:         Varying is a FRP implentation aimed at providing a
+                     simple way to describe values that change over some domain.
+                     It has convenience functions for tweening and aims to have
+                     a well documented API.
 
 -- URL for the project homepage or repository.
 homepage:            https://github.com/schell/varying
@@ -51,7 +51,7 @@ build-type:          Simple
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.10
 
-extra-source-files:  README.md
+extra-source-files:  README.md, changelog.md
 
 
 source-repository head

@@ -4,25 +4,34 @@
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 --
---  Using 'SplineT' we can easily create continuous varying values from
---  multiple piecewise varying values. A spline is a monadic layer on top of
---  automaton based varying values that are only piecewise continuous,
---  allowing us to build up varying values that are continuous over greater
---  and greater domains.
+--  Using splines we can easily create continuously varying values from
+--  multiple piecewise event streams. A spline is a monadic layer on top of
+--  event streams which are only continuous over a certain domain. The idea
+--  is that we use do notation to "run an event stream" from which we will
+--  consume produced values. Once the event stream inhibits the do-notation
+--  computation completes and returns a result value. That result value is then
+--  used to determine the next spline in the sequence. This allows us to build
+--  up long, complex behaviors sequentially using a very familiar notation
+--  that can be easily turned into a continuously varying value.
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 module Control.Varying.Spline (
-    Step(..),
-    SplineT(..),
+    -- * Spline
     Spline,
+    runSpline,
+    execSpline,
+    spline,
+    -- * Spline Transformer
+    SplineT(..),
     runSplineT,
     evalSplineT,
     execSplineT,
-    spline,
     varyUntilEvent,
-    capture
+    capture,
+    -- * Step
+    Step(..),
 ) where
 
 import Control.Varying.Core
@@ -32,7 +41,7 @@ import Control.Applicative
 import Data.Monoid
 
 -- | A discrete step in a continuous function. This is simply a type that
--- discretely describes an eventual value on the right and a monoidal iteration
+-- discretely describes an eventual value on the right and a monoidal output
 -- value on the left.
 data Step f b where
     Step :: Monoid f => f -> Event b -> Step f b
@@ -62,24 +71,27 @@ instance Monoid f => Applicative (Step f) where
     pure a = Step mempty $ Event a
     (Step uia f) <*> (Step uib b) = Step (mappend uia uib) (f <*> b)
 
--- | A spline is a varying value that is continuous over a domain. A spline
--- can end in a result value of a different type than its iteration type.
+-- | 'SplineT' shares a number of types with 'Var', specifically its monad,
+-- input and output types (m, a and b, respectively). A spline adds
+-- a container type that determines how empty output values should be
+-- created, appended and applied (the type must be monoidal and applicative).
+-- It also adds a result type which represents the monadic computation's result
+-- value.
 -- Much like the State monad it has an "internal state" and an eventual
--- return type. In most cases the internal state (the iteration value) is
--- the interesting part of the spline, but sometimes it's useful to use the
--- return value in determining the next spline.
+-- return value, where the internal state is the output value. The result
+-- value is used only in determining the next spline to sequence.
 data SplineT m f a b c = SplineT { unSplineT :: Var m a (Step (f b) c) }
                        | SplineTConst c
 
+-- | Unwrap a spline into a varying value.
 runSplineT :: (Applicative m, Monad m, Monoid (f b))
            => SplineT m f a b c -> Var m a (Step (f b) c)
 runSplineT (SplineT v) = v
 runSplineT (SplineTConst x) = pure $ pure x
 
--- | For most use cases (like Int, Float, Double - essentially any numbers)
--- a spline will use Event as its iterator container. This means that new
--- values overwrite/replace old values due to Event's 'Last'-like monoid
--- instance.
+-- | 'Spline' is a specialized 'SplineT' that uses Event as its output
+-- container. This means that new values overwrite/replace old values due to
+-- Event's 'Last'-like monoid instance.
 type Spline m a b c = SplineT m Event a b c
 
 -- | A spline is a functor by applying the function to the result.
@@ -87,11 +99,11 @@ instance (Applicative m, Monad m) => Functor (SplineT m f a b) where
     fmap f (SplineT v) = SplineT $ fmap (fmap f) v
     fmap f (SplineTConst c)  = SplineTConst $ f c
 
--- | A spline is an applicative if its iteration type is a monoid. It
+-- | A spline is an applicative if its output type is a monoid. It
 -- responds to 'pure' by returning a spline that immediately returns the
 -- argument. It responds to '<*>' by applying the left arguments eventual
 -- value (the function) to the right arguments eventual value. The
--- iteration values will me combined with 'mappend'.
+-- output values will me combined with 'mappend'.
 instance (Monoid (f b), Applicative m, Monad m)
     => Applicative (SplineT m f a b) where
     pure = SplineTConst
@@ -100,7 +112,7 @@ instance (Monoid (f b), Applicative m, Monad m)
     (SplineTConst f) <*> (SplineT vx) = SplineT $ fmap (fmap f) vx
     (SplineT vf) <*> (SplineT vx) = SplineT $ ((<*>) <$> vf) <*> vx
 
--- | A spline is monad if its iteration type is a monoid. A spline responds
+-- | A spline is monad if its output type is a monoid. A spline responds
 -- to bind by running until it produces an eventual value, then uses that
 -- value to run the next spline.
 instance (Monoid (f b), Applicative m, Monad m) => Monad (SplineT m f a b) where
@@ -113,14 +125,14 @@ instance (Monoid (f b), Applicative m, Monad m) => Monad (SplineT m f a b) where
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value and
--- uses 'mempty' to generate an empty iteration value.
+-- uses 'mempty' to generate an empty output value.
 instance (Monoid (f b), Functor m, Applicative m, MonadIO m)
     => MonadIO (SplineT m f a b) where
     liftIO f = SplineT $ Var $ \_ -> do
         n <- (Step mempty . Event) <$> liftIO f
         return (n, pure n)
 
--- | Evaluates a spline to a varying value of its iteration type.
+-- | Evaluates a spline to a varying value of its output type.
 execSplineT :: (Applicative m, Monad m, Monoid (f b))
             => SplineT m f a b c -> Var m a (f b)
 execSplineT = (stepIter <$>) . runSplineT
@@ -134,19 +146,31 @@ evalSplineT = (stepResult <$>) . runSplineT
 
 -- | Create a spline using an event stream. The spline will run until the
 -- stream inhibits, using the stream's last produced value as the current
--- iteration value. In the case the stream inhibits before producing
+-- output value. In the case the stream inhibits before producing
 -- a value the default value is used. The spline's result value is the last
--- iteration value.
-spline :: (Applicative m, Monad m) => x -> Var m a (Event x) -> Spline m a x x
+-- output value.
+spline :: (Applicative m, Monad m) => b -> Var m a (Event b) -> Spline m a b b
 spline x ve = SplineT $ Var $ \a -> do
     (ex, ve') <- runVar ve a
     case ex of
         NoEvent  -> let n = Step (Event x) (Event x) in return (n, pure n)
         Event x' -> return (Step (Event x') NoEvent, runSplineT $ spline x' ve')
 
+-- | Unwrap a spline into a varying value. This is an alias of
+-- 'runSplineT'.
+runSpline :: (Applicative m, Monad m) => Spline m a b c -> Var m a (Step (Event b) c)
+runSpline = runSplineT
+
+-- | Using a default start value, evaluate the spline to a varying value.
+-- A spline is only defined over a finite domain so we must supply a default
+-- value to use before the spline produces its first output value.
+execSpline :: (Applicative m, Monad m) => b -> Spline m a b c -> Var m a b
+execSpline x (SplineTConst _) = pure x
+execSpline x s = execSplineT s ~> foldStream (\_ y -> y) x
+
 -- | Create a spline from a varying value and an event stream. The spline
--- uses the varying value as its iteration value. The spline will run until
--- the event stream produces a value, at that point the last iteration
+-- uses the varying value as its output value. The spline will run until
+-- the event stream produces a value, at that point the last output
 -- value and the event value are used in a merge function to produce the
 -- spline's result value.
 varyUntilEvent :: (Applicative m, Monad m)
@@ -156,12 +180,14 @@ varyUntilEvent v ve f = SplineT $ Var $ \a -> do
     (b, v') <- runVar v a
     (ec, ve') <- runVar ve a
     case ec of
-        NoEvent -> return (Step (Event b) NoEvent, runSplineT $ varyUntilEvent v' ve' f)
+        NoEvent -> return (Step (Event b) NoEvent,
+                           runSplineT $ varyUntilEvent v' ve' f)
         Event c -> let n = Step (Event b) (Event $ f b c)
                    in return (n, pure n)
 
--- | Captures the spline's latest iteration value and tuples it with the
--- spline's result value.
+-- | Capture the spline's latest output value and tuple it with the
+-- spline's result value. This is helpful when you want to sample the last
+-- output value in order to determine the next spline to sequence.
 capture :: (Applicative m, Monad m, Monoid (f b), Eq (f b))
         => SplineT m f a b c -> SplineT m f a b (f b, c)
 capture (SplineTConst x) = SplineTConst (mempty, x)

@@ -18,13 +18,13 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE Rank2Types #-}
 module Control.Varying.Tween (
-    -- * Tweening with splines
-    -- $splines
-    tweenTo,
     -- * Creating tweens
     -- $creation
     tween,
     constant,
+    -- * Tweening with splines
+    -- $splines
+    tweenTo,
     -- * Interpolation functions
     -- $lerping
     linear,
@@ -60,16 +60,6 @@ import Control.Varying.Time
 import Control.Arrow
 import Control.Applicative
 
---------------------------------------------------------------------------------
--- $splines
--- The easiest way to tween is by using splines. A spline in this context is a
--- numeric computation that is "smooth" over some domain. It is defined in
--- a piecewise manner by sequencing other splines together using do-notation.
---------------------------------------------------------------------------------
--- |
-tweenTo :: (Applicative m, Monad m, Fractional t, Ord t)
-        => Easing t -> t -> t -> t -> Spline m t t t
-tweenTo f start end dur = spline start $ tween f start end dur
 --------------------------------------------------------------------------------
 -- $lerping
 -- These pure functions take a `c` (total change in value, ie end - start),
@@ -169,8 +159,8 @@ linear c t b = c * t + b
 --------------------------------------------------------------------------------
 -- $creation
 --
--- The standard way to start tweening values is to use 'tween' along with
--- an interpolation function such as 'easeInOutExpo'. For example,
+-- The most direct route toward tweening values is to use 'tween'
+-- along with an interpolation function such as 'easeInOutExpo'. For example,
 -- @tween easeInOutExpo 0 100 10@, this will create an event stream that
 -- produces @Event t@s where `t` is tweened from 0 to 100 over 10 seconds.
 -- Once the 10 seconds are up, the stream will inhibit (produce `NoEvent`)
@@ -215,6 +205,27 @@ tween f start end dur = proc dt -> do
 constant :: (Applicative m, Monad m, Num t, Ord t)
          => a -> t -> Var m t (Event a)
 constant value duration = use value $ before duration
+
+--------------------------------------------------------------------------------
+-- $splines
+-- If you plan on doing a lot of tweening it's probably easiest to build up
+-- your tweens as splines using do-notation.
+-- A spline in this context is a numeric computation that is "smooth" over some
+-- domain. It is defined in a piecewise manner by sequencing other splines
+-- together using do-notation.
+-- You can then run the spline, transforming it back into a continuous
+-- varying value.
+--
+-- @
+-- thereAndBack = execSpline 0 $ do
+--   x <- tweenTo easeOutExpo 0 100 1
+--   tweenTo easeOutExpo x 0 1
+-- @
+--------------------------------------------------------------------------------
+-- |
+tweenTo :: (Applicative m, Monad m, Fractional t, Ord t)
+        => Easing t -> t -> t -> t -> Spline m t t t
+tweenTo f start end dur = spline start $ tween f start end dur
 
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)
