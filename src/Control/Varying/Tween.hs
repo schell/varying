@@ -192,7 +192,7 @@ constant value duration = use value $ before duration
 --------------------------------------------------------------------------------
 -- |
 tweenTo :: (Applicative m, Monad m, Fractional t, Ord t)
-        => Easing t -> t -> t -> t -> Spline m t t t
+        => Easing t -> t -> t -> t -> Spline t t m t
 tweenTo f start end dur = spline start $ tween f start end dur
 
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
