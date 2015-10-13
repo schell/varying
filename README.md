@@ -16,7 +16,6 @@ documented with a small API.
 module Main where
 
 import Control.Varying
-import Control.Varying.Time -- time is not auto-exported
 import Control.Applicative
 import Text.Printf
 
