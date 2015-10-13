@@ -31,7 +31,7 @@ module Control.Varying.Spline (
     -- * Special operations.
     untilEvent,
     race,
-    poll,
+    mix,
     capture,
     mapOutput,
     -- * Step
@@ -126,6 +126,7 @@ instance (Monoid (f b), Applicative m, Monad m)
 -- to bind by running until it produces an eventual value, then uses that
 -- value to run the next spline.
 instance (Monoid (f b), Applicative m, Monad m) => Monad (SplineT f a b m) where
+    return = pure
     (SplineTConst x) >>= f = f x
     (SplineT v) >>= f = SplineT $ Var $ \i -> do
         (Step b e, v') <- runVar v i
@@ -133,10 +134,10 @@ instance (Monoid (f b), Applicative m, Monad m) => Monad (SplineT f a b m) where
             NoEvent -> return (Step b NoEvent, runSplineT $ SplineT v' >>= f)
             Event x -> runVar (runSplineT $ f x) i
 
+-- | A spline is a transformer and other monadic computations can be lifted
+-- int a spline.
 instance Monoid (f b) => MonadTrans (SplineT f a b) where
-    lift f = SplineT $ Var $ \_ -> do
-        n <- (Step mempty . Event) <$> f
-        return (n, pure n)
+    lift f = SplineT $ varM $ const $ liftM (Step mempty . Event) f
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value and
@@ -193,7 +194,7 @@ untilEvent v ve = SplineT $ t ~> var (uncurry f)
 -- | Run two splines concurrently and return the result of the SplineT that
 -- concludes first. If they conclude at the same time the result is taken from
 -- the spline on the left.
-race :: (Monad m, Monoid (f u))
+race :: (Applicative m, Monad m, Monoid (f u))
           => SplineT f i u m a -> SplineT f i u m a -> SplineT f i u m a
 race (SplineTConst a) s =
     race (SplineT $ pure $ Step mempty $ Event a) s
@@ -211,10 +212,10 @@ race (SplineT va) (SplineT vb) = SplineT $ Var $ \i -> do
 -- | Run a list of splines concurrently. Restart individual splines whenever
 -- they conclude in a value. Return a list of the most recent result values once
 -- the control spline concludes.
-poll :: (Monad m, Monoid (f b))
-     => [Maybe c -> SplineT f a b m c] -> SplineT f a b m ()
-     -> SplineT f a b m [Maybe c]
-poll gs = go gs es $ zipWith ($) gs xs
+mix :: (Applicative m, Monad m, Monoid (f b))
+    => [Maybe c -> SplineT f a b m c] -> SplineT f a b m ()
+    -> SplineT f a b m [Maybe c]
+mix gs = go gs es $ zipWith ($) gs xs
     where es = replicate n NoEvent
           xs = replicate n Nothing
           n  = length gs
@@ -248,7 +249,7 @@ capture (SplineT v) = capture' mempty v
               return (Step fb ec', runSplineT $ capture' mb' v'')
 
 -- | Map the output value of a spline.
-mapOutput :: (Functor f, Monoid (f t), Monad m)
+mapOutput :: (Functor f, Monoid (f t), Applicative m, Monad m)
           => Var m a (f b -> f t) -> SplineT f a b m c -> SplineT f a t m c
 mapOutput _ (SplineTConst c) = SplineTConst c
 mapOutput vf (SplineT vx) = SplineT $ toIter <$> vf <*> vx

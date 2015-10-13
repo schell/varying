@@ -24,18 +24,18 @@ module Control.Varying.Event (
     onJust,
     onUnique,
     onWhen,
-    -- * Folding event streams
+    -- * Folding and gathering event streams
     foldStream,
+    startingWith, startWith,
     -- * List-like operations on event streams
     filterE,
     takeE,
     dropE,
-    -- * Creating event streams from values
+    -- * Primitive event streams
     once,
     always,
     never,
     -- * Switching
-    -- $switching
     switchByMode,
     -- * Bubbling
     onlyWhen,
@@ -122,15 +122,9 @@ foldStream f acc = Var $ \e ->
 -- @
 -- time ~> after 3 ~> startingWith 0
 -- @
--- This is similar to 'hold' except that it streams events from its input value
--- instead of another var.
 startingWith, startWith :: (Applicative m, Monad m) => a -> Var m (Event a) a
 startingWith = startWith
-startWith a = foldStream (\_ b -> b) a
-
--- | Produce the given value once and then inhibit forever.
-once :: (Applicative m, Monad m) => b -> Var m a (Event b)
-once b = Var $ \_ -> return (Event b, never)
+startWith = foldStream (\_ a -> a)
 
 -- | Stream through some number of successful events and then inhibit forever.
 takeE :: (Applicative m, Monad m)
@@ -158,6 +152,12 @@ filterE :: (Applicative m, Monad m)
 filterE p v = v ~> var check
     where check (Event b) = if p b then Event b else NoEvent
           check _ = NoEvent
+--------------------------------------------------------------------------------
+-- Primitive event streams
+--------------------------------------------------------------------------------
+-- | Produce the given value once and then inhibit forever.
+once :: (Applicative m, Monad m) => b -> Var m a (Event b)
+once b = Var $ \_ -> return (Event b, never)
 
 -- | Never produces any event values.
 never :: (Applicative m, Monad m) => Var m b (Event c)
@@ -237,7 +237,9 @@ instance Num a => Num (Event a) where
     signum = fmap signum
     fromInteger = pure . fromInteger
 
-instance MonadPlus Event
+instance MonadPlus Event where
+    mzero = mempty
+    mplus = (<|>)
 
 instance Monad Event where
    return = Event
