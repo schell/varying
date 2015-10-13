@@ -2,7 +2,7 @@
 [![Hackage](https://img.shields.io/hackage/v/varying.svg)](http://hackage.haskell.org/package/varying)
 [![Build Status](https://travis-ci.org/schell/varying.svg)](https://travis-ci.org/schell/varying)
 
-This library provides automaton based varying values useful for both functional
+This library provides automaton based value streams useful for both functional
 reactive programming (FRP) and locally stateful programming (LSP). It is 
 influenced by the [netwire](http://hackage.haskell.org/package/netwire) and 
 [auto](http://hackage.haskell.org/package/auto) packages. Unlike netwire the 
@@ -61,7 +61,7 @@ tweenx =
                  -- We can accomplish this with recursion and the `andThen`
                  -- combinator, which samples an event stream until it
                  -- inhibits and then switches to a normal value stream (a
-                 -- varying value). Put succinctly, it disolves our events into
+                 -- value stream). Put succinctly, it disolves our events into
                  -- values.
                  `andThen` tweenx
 

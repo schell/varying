@@ -182,7 +182,7 @@ constant value duration = use value $ before duration
 -- domain. It is defined in a piecewise manner by sequencing other splines
 -- together using do-notation.
 -- You can then run the spline, transforming it back into a continuous
--- varying value.
+-- value stream.
 --
 -- @
 -- thereAndBack = execSpline 0 $ do

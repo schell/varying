@@ -7,25 +7,25 @@
 --   Values that change over a given domain.
 --
 --   Varying values take some input (the domain ~ time, place, etc) and produce
---   a sample and a new varying value. This pattern is known as an automaton.
+--   a sample and a new value stream. This pattern is known as an automaton.
 --   `varying` uses this pattern as its base type with the additon of a monadic
 --   computation to create locally stateful signals that change over some
 --   domain.
 module Control.Varying.Core (
     Var(..),
-    -- * Creating varying values
+    -- * Creating value streams
     -- $creation
     var,
     varM,
     mkState,
-    -- * Composing varying values
+    -- * Composing value streams
     -- $composition
     (<~),
     (~>),
     -- * Adjusting and accumulating
     delay,
     accumulate,
-    -- * Sampling varying values (running, entry points)
+    -- * Sampling value streams (running and other entry points)
     -- $running
     evalVar,
     execVar,
@@ -33,7 +33,7 @@ module Control.Varying.Core (
     loopVar_,
     whileVar,
     whileVar_,
-    -- * Testing varying values
+    -- * Testing value streams
     testVar,
     testVar_,
     testWhile_,
@@ -51,7 +51,7 @@ import Data.Monoid
 import Debug.Trace
 --------------------------------------------------------------------------------
 -- $creation
--- You can create a pure varying value by lifting a function @(a -> b)@
+-- You can create a pure value stream by lifting a function @(a -> b)@
 -- with 'var':
 --
 -- @
@@ -61,7 +61,7 @@ import Debug.Trace
 --
 -- 'var' is also equivalent to 'arr'.
 --
--- You can create a monadic varying value by lifting a monadic computation
+-- You can create a monadic value stream by lifting a monadic computation
 -- @(a -> m b)@ using 'varM':
 --
 -- @
@@ -71,7 +71,7 @@ import Debug.Trace
 --
 -- You can create either with the raw constructor. You can also create your
 -- own combinators using the raw constructor, as it allows you full control
--- over how varying values are stepped and sampled:
+-- over how value streams are stepped and sampled:
 --
 -- @
 -- delay :: Monad m => b -> Var m a b -> Var m a b
@@ -108,7 +108,7 @@ mkState f s = Var $ \a -> do
 -- > do (sample, v') <- runVar v inputValue
 --
 -- Much like Control.Monad.State there are other entry points for running
--- varying values like 'evalVar', 'execVar'. There are also extra control
+-- value streams like 'evalVar', 'execVar'. There are also extra control
 -- structures like 'loopVar' and 'whileVar' and more.
 --------------------------------------------------------------------------------
 
@@ -204,11 +204,11 @@ delay b v = Var $ \a -> return (b, go a v)
                                     return (b', go a' v'')
 --------------------------------------------------------------------------------
 -- $composition
--- You can compose varying values together using '~>' and '<~'. The "right plug"
--- ('~>') takes the output from a varying value on the left and "plugs" it
--- into the input of the varying value on the right. The "left plug" does
+-- You can compose value streams together using '~>' and '<~'. The "right plug"
+-- ('~>') takes the output from a value stream on the left and "plugs" it
+-- into the input of the value stream on the right. The "left plug" does
 -- the same thing only in the opposite direction. This allows you to write
--- varying values that read naturally.
+-- value streams that read naturally.
 --------------------------------------------------------------------------------
 -- | Same as '~>' with flipped parameters.
 (<~) :: Monad m => Var m b c -> Var m a b -> Var m a c
@@ -316,7 +316,7 @@ instance (Applicative m, Monad m, Fractional b) => Fractional (Var m a b) where
 --------------------------------------------------------------------------------
 -- Core datatypes
 --------------------------------------------------------------------------------
--- | The vessel of a varying value. A 'Var' is a structure that contains a value
+-- | The vessel of a value stream. A 'Var' is a structure that contains a value
 -- that changes over some input. That input could be time (Float, Double, etc)
 -- or 'Control.Varying.Event.Event's or 'Char' - whatever.
 -- It's a kind of Mealy machine (an automaton) with effects.

@@ -13,12 +13,12 @@ name:                varying
 version:             0.2.0.0
 
 -- A short (one-line) description of the package.
-synopsis:            FRP through varying values and monadic splines.
+synopsis:            FRP through value streams and monadic splines.
 
 -- A longer description of the package.
 description:         Varying is a FRP implentation aimed at providing a
-                     simple way to describe values that change over some domain.
-                     It allows monadic, applicative or arrow notation and has
+                     simple way to describe values that change over a domain.
+                     It allows monadic, applicative and arrow notation and has
                      convenience functions for tweening.
 
 -- URL for the project homepage or repository.

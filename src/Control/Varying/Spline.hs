@@ -4,7 +4,7 @@
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 --
---  Using splines we can easily create continuously varying values from
+--  Using splines we can easily create continuous value streams from
 --  multiple piecewise event streams. A spline is a monadic layer on top of
 --  event streams which are only continuous over a certain domain. The idea
 --  is that we use do notation to "run an event stream" from which we will
@@ -12,7 +12,8 @@
 --  computation completes and returns a result value. That result value is then
 --  used to determine the next spline in the sequence. This allows us to build
 --  up long, complex behaviors sequentially using a very familiar notation
---  that can be easily turned into a continuously varying value.
+--  that can then be easily turned into a continuous value stream with
+--  'execSpline'.
 
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -20,7 +21,6 @@
 module Control.Varying.Spline (
     -- * Spline
     Spline,
-    runSpline,
     execSpline,
     spline,
     -- * Spline Transformer
@@ -28,8 +28,12 @@ module Control.Varying.Spline (
     runSplineT,
     evalSplineT,
     execSplineT,
-    varyUntilEvent,
+    -- * Special operations.
+    untilEvent,
+    race,
+    poll,
     capture,
+    mapOutput,
     -- * Step
     Step(..),
 ) where
@@ -38,6 +42,7 @@ import Control.Varying.Core
 import Control.Varying.Event
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
+import Control.Monad
 import Control.Applicative
 import Data.Monoid
 
@@ -54,6 +59,10 @@ stepIter (Step a _) = a
 -- | Returns the right value of a step.
 stepResult :: Step f b -> Event b
 stepResult (Step _ b) = b
+
+toIter :: (Functor f, Monoid (f b))
+         => (f a -> f b) -> Step (f a) c -> Step (f b) c
+toIter f (Step a b) = Step (f a) b
 
 -- | A discrete step is a functor by applying a function to the contained
 -- event's value.
@@ -84,7 +93,7 @@ instance Monoid f => Applicative (Step f) where
 data SplineT f a b m c = SplineT { unSplineT :: Var m a (Step (f b) c) }
                        | SplineTConst c
 
--- | Unwrap a spline into a varying value.
+-- | Unwrap a spline into a value stream.
 runSplineT :: (Applicative m, Monad m, Monoid (f b))
            => SplineT f a b m c -> Var m a (Step (f b) c)
 runSplineT (SplineT v) = v
@@ -136,13 +145,13 @@ instance (Monoid (f b), Functor m, Applicative m, MonadIO m)
     => MonadIO (SplineT f a b m) where
     liftIO = lift . liftIO
 
--- | Evaluates a spline to a varying value of its output type.
+-- | Evaluates a spline to a value stream of its output type.
 execSplineT :: (Applicative m, Monad m, Monoid (f b))
             => SplineT f a b m c -> Var m a (f b)
 execSplineT = (stepIter <$>) . runSplineT
 
 -- | Evaluates a spline to an event stream of its result. The resulting
--- varying value inhibits until the spline's domain is complete and then it
+-- value stream inhibits until the spline's domain is complete and then it
 -- produces events of the result type.
 evalSplineT :: (Applicative m, Monad m, Monoid (f b))
             => SplineT f a b m c -> Var m a (Event c)
@@ -160,34 +169,70 @@ spline x ve = SplineT $ Var $ \a -> do
         NoEvent  -> let n = Step (Event x) (Event x) in return (n, pure n)
         Event x' -> return (Step (Event x') NoEvent, runSplineT $ spline x' ve')
 
--- | Unwrap a spline into a varying value. This is an alias of
--- 'runSplineT'.
-runSpline :: (Applicative m, Monad m) => Spline a b m c -> Var m a (Step (Event b) c)
-runSpline = runSplineT
-
--- | Using a default start value, evaluate the spline to a varying value.
+-- | Using a default start value, evaluate the spline to a value stream.
 -- A spline is only defined over a finite domain so we must supply a default
 -- value to use before the spline produces its first output value.
 execSpline :: (Applicative m, Monad m) => b -> Spline a b m c -> Var m a b
 execSpline x (SplineTConst _) = pure x
 execSpline x s = execSplineT s ~> foldStream (\_ y -> y) x
 
--- | Create a spline from a varying value and an event stream. The spline
--- uses the varying value as its output value. The spline will run until
+-- | Create a spline from a value stream and an event stream. The spline
+-- uses the value stream as its output value. The spline will run until
 -- the event stream produces a value, at that point the last output
--- value and the event value are used in a merge function to produce the
--- spline's result value.
-varyUntilEvent :: (Applicative m, Monad m)
-               => Var m a b -> Var m a (Event c) -> (b -> c -> d)
-               -> Spline a b m d
-varyUntilEvent v ve f = SplineT $ Var $ \a -> do
-    (b, v') <- runVar v a
-    (ec, ve') <- runVar ve a
-    case ec of
-        NoEvent -> return (Step (Event b) NoEvent,
-                           runSplineT $ varyUntilEvent v' ve' f)
-        Event c -> let n = Step (Event b) (Event $ f b c)
-                   in return (n, pure n)
+-- value and the event value are tupled and returned as the spline's result
+-- value.
+untilEvent :: (Applicative m, Monad m)
+           => Var m a b -> Var m a (Event c)
+           -> Spline a b m (b,c)
+untilEvent v ve = SplineT $ t ~> var (uncurry f)
+    where t = (,) <$> v <*> ve
+          f b ec = case ec of
+                       NoEvent -> Step (Event b) NoEvent
+                       Event c -> Step (Event b) (Event (b, c))
+
+-- | Run two splines concurrently and return the result of the SplineT that
+-- concludes first. If they conclude at the same time the result is taken from
+-- the spline on the left.
+race :: (Monad m, Monoid (f u))
+          => SplineT f i u m a -> SplineT f i u m a -> SplineT f i u m a
+race (SplineTConst a) s =
+    race (SplineT $ pure $ Step mempty $ Event a) s
+race s (SplineTConst b) =
+    race s (SplineT $ pure $ Step mempty $ Event b)
+race (SplineT va) (SplineT vb) = SplineT $ Var $ \i -> do
+    (Step ua ea, va') <- runVar va i
+    (Step ub eb, vb') <- runVar vb i
+    case (ea,eb) of
+        (Event _,_) -> return (Step (ua <> ub) ea, va')
+        (_,Event _) -> return (Step (ua <> ub) eb, vb')
+        (_,_)       -> return (Step (ua <> ub) NoEvent,
+                               runSplineT $ race (SplineT va') (SplineT vb'))
+
+-- | Run a list of splines concurrently. Restart individual splines whenever
+-- they conclude in a value. Return a list of the most recent result values once
+-- the control spline concludes.
+poll :: (Monad m, Monoid (f b))
+     => [Maybe c -> SplineT f a b m c] -> SplineT f a b m ()
+     -> SplineT f a b m [Maybe c]
+poll gs = go gs es $ zipWith ($) gs xs
+    where es = replicate n NoEvent
+          xs = replicate n Nothing
+          n  = length gs
+          go fs evs guis egui = SplineT $ Var $ \a -> do
+            let step (ecs, fb, vs) (f, ec, g) = do
+                    (Step fb' ec', v) <- runVar (runSplineT g) a
+                    let ec'' = ec <> ec'
+                        fb'' = fb <> fb'
+                        v'   = case ec' of
+                                   NoEvent -> v
+                                   Event c -> runSplineT $ f $ Just c
+                    return (ecs ++ [ec''], fb'', vs ++ [SplineT v'])
+            (ecs, fb, guis') <- foldM step ([],mempty,[]) (zip3 fs evs guis)
+            (Step fb' ec, v) <- runVar (runSplineT egui) a
+            let fb'' = fb <> fb'
+                ec' = map toMaybe ecs <$ ec
+            return (Step fb'' ec',
+                    runSplineT $ go fs ecs guis' $ SplineT v)
 
 -- | Capture the spline's latest output value and tuple it with the
 -- spline's result value. This is helpful when you want to sample the last
@@ -201,3 +246,9 @@ capture (SplineT v) = capture' mempty v
               let mb' = if fb == mempty then mb else fb
                   ec' = (mb',) <$> ec
               return (Step fb ec', runSplineT $ capture' mb' v'')
+
+-- | Map the output value of a spline.
+mapOutput :: (Functor f, Monoid (f t), Monad m)
+          => Var m a (f b -> f t) -> SplineT f a b m c -> SplineT f a t m c
+mapOutput _ (SplineTConst c) = SplineTConst c
+mapOutput vf (SplineT vx) = SplineT $ toIter <$> vf <*> vx
