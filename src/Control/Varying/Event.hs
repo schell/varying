@@ -6,11 +6,11 @@
 --
 --  'Event' streams describe things that happen at a specific domain.
 --  For example, you can think of the event stream
---  @Var IO Double (Event ())@ as an occurrence of `()` at a specific input
---  (`Double`).
+--  @Var IO Double (Event ())@ as an occurrence of () at a specific input
+--  of type 'Double'.
 --
 --  For sequencing streams please check out 'Control.Varying.Spline' which
---  lets you chain together sequences of streams using do-notation.
+--  lets you chain together sequences of event streams using do-notation.
 module Control.Varying.Event (
     Event(..),
     -- * Transforming event values.
@@ -48,7 +48,7 @@ import Control.Applicative
 import Control.Monad
 import Data.Monoid
 --------------------------------------------------------------------------------
--- Transforming event values into usable values.
+-- Transforming event values into usable values
 --------------------------------------------------------------------------------
 -- | Turns an 'Event' into a 'Maybe'.
 toMaybe :: Event a -> Maybe a
@@ -268,8 +268,7 @@ instance Functor Event where
     fmap f (Event a) = Event $ f a
     fmap _ NoEvent = NoEvent
 
--- | For all intents and purposes you can think of an Event as a Maybe.
--- A value of @Event ()@ means that an event has occurred and that the
+-- | A value of @Event ()@ means that an event has occurred and that the
 -- result is a @()@. A value of @NoEvent@ means that an event did not
 -- occur.
 --

@@ -4,13 +4,13 @@
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 --
---   Values that change over a given domain.
+--   Value streams represent values that change over a given domain.
 --
---   Varying values take some input (the domain ~ time, place, etc) and produce
---   a sample and a new value stream. This pattern is known as an automaton.
---   `varying` uses this pattern as its base type with the additon of a monadic
---   computation to create locally stateful signals that change over some
---   domain.
+--   A stream takes some input (the domain e.g. time, place, etc) and when
+--   sampled using 'runVar' - produces a value and a new value stream. This
+--   pattern is known as an automaton. `varying` uses this pattern as its base
+--   type with the additon of a monadic computation to create locally stateful
+--   signals that change over some domain.
 module Control.Varying.Core (
     Var(..),
     -- * Creating value streams
@@ -59,7 +59,7 @@ import Debug.Trace
 -- addsOne = var (+1)
 -- @
 --
--- 'var' is also equivalent to 'arr'.
+-- 'var' is equivalent to 'arr'.
 --
 -- You can create a monadic value stream by lifting a monadic computation
 -- @(a -> m b)@ using 'varM':
@@ -101,17 +101,15 @@ mkState f s = Var $ \a -> do
   return (b', mkState f s')
 --------------------------------------------------------------------------------
 -- $running
--- The easiest way to sample a 'Var' is to run it in the desired monad with
--- 'runVar'. This will give you a sample value and a new 'Var' bundled up in a
--- tuple:
+-- The easiest way to sample a stream is to run it in the desired monad with
+-- 'runVar'. This will produce a sample value and a new stream.
 --
 -- > do (sample, v') <- runVar v inputValue
 --
 -- Much like Control.Monad.State there are other entry points for running
 -- value streams like 'evalVar', 'execVar'. There are also extra control
--- structures like 'loopVar' and 'whileVar' and more.
+-- structures such as 'loopVar' and 'whileVar'.
 --------------------------------------------------------------------------------
-
 -- | Iterate a 'Var' once and return the sample value.
 evalVar :: Functor m => Var m a b -> a -> m b
 evalVar v a = fst <$> runVar v a
@@ -193,8 +191,8 @@ accumulate f b = Var $ \a -> do
     let b' = f b a
     return (b', accumulate f b')
 
--- | Delays the given 'Var' by one sample using a parameter as the first
--- sample. This enables the programmer to create 'Var's that depend on
+-- | Delays the given stream by one sample using the argument as the first
+-- sample. This enables the programmer to create streams that depend on
 -- themselves for values. For example:
 --
 -- > let v = 1 + delay 0 v in testVar_ v
@@ -207,8 +205,8 @@ delay b v = Var $ \a -> return (b, go a v)
 -- You can compose value streams together using '~>' and '<~'. The "right plug"
 -- ('~>') takes the output from a value stream on the left and "plugs" it
 -- into the input of the value stream on the right. The "left plug" does
--- the same thing only in the opposite direction. This allows you to write
--- value streams that read naturally.
+-- the same thing in the opposite direction. This allows you to write value
+-- streams that read naturally.
 --------------------------------------------------------------------------------
 -- | Same as '~>' with flipped parameters.
 (<~) :: Monad m => Var m b c -> Var m a b -> Var m a c

@@ -22,9 +22,6 @@ module Control.Varying.Tween (
     -- $creation
     tween,
     constant,
-    -- * Tweening with splines
-    -- $splines
-    tweenTo,
     -- * Interpolation functions
     -- $lerping
     linear,
@@ -42,6 +39,7 @@ module Control.Varying.Tween (
     easeInQuad,
     easeOutQuad,
     -- * Writing your own tweens
+    -- $writing
     Tween,
     Easing
 ) where
@@ -77,6 +75,7 @@ easeInCubic c t b =  c * t*t*t + b
 easeOutCubic :: Num t => Easing t
 easeOutCubic c t b =  let t' = t - 1 in c * (t'*t'*t' + 1) + b
 
+-- | Ease in by some power.
 easeInPow :: Num t => Int -> Easing t
 easeInPow power c t b =  c * (t^power) + b
 
@@ -126,82 +125,55 @@ linear c t b = c * t + b
 
 --------------------------------------------------------------------------------
 -- $creation
---
 -- The most direct route toward tweening values is to use 'tween'
--- along with an interpolation function such as 'easeInOutExpo'. For example,
--- @tween easeInOutExpo 0 100 10@, this will create an event stream that
--- produces @Event t@s where `t` is tweened from 0 to 100 over 10 seconds.
--- Once the 10 seconds are up, the stream will inhibit (produce `NoEvent`)
--- forever. To create a stream of `t` that is tweened from 0 to 100 and
--- then stays at 100 forever after requires you to use a combinator from the
--- 'Event' module, like so:
---
--- >tween easeInOutExpo 0 100 10 `andThen` 100
---
--- The 'andThen' combinator "disolves" our 'Event's by switching to
--- another stream once the first inhibits.
+-- along with an interpolation function such as 'easeInExpo'. For example,
+-- @tween easeInOutExpo 0 100 10@, this will create a spline that produces a
+-- number interpolated from 0 to 100 over 10 seconds. At the end of the
+-- tween the spline will return the result value.
 --------------------------------------------------------------------------------
 
--- | Creates an event stream that produces an event value interpolated between
--- a start and end value using an easing equation ('Easing') over a duration.
--- The resulting 'Var' will take a time delta as input. For example:
+-- | Creates a spline that produces a value interpolated between a start and
+-- end value using an easing equation ('Easing') over a duration.  The
+-- resulting spline will take a time delta as input. For example:
 --
 -- @
--- testWhile_ isEvent v
+-- testWhile_ isEvent (deltaUTC ~> v)
 --    where v :: Var IO a (Event Double)
---          v = deltaUTC ~> tween easeOutExpo 0 100 5
+--          v = execSpline 0 $ tween easeOutExpo 0 100 5
 -- @
 --
 -- Keep in mind `tween` must be fed time deltas, not absolute time or
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
 tween :: (Applicative m, Monad m, Fractional t, Ord t)
-      => Easing t -> t -> t -> t -> Var m t (Event t)
-tween f start end dur = proc dt -> do
-    -- Current time as percentage / amount of interpolation (0.0 - 1.0)
-    t <- timeAsPercentageOf dur -< dt
-    -- Emitted event
-    e <- before dur -< dt
-    -- Total change in value
-    let c = end - start
-        b = start
-        x = f c t b
-    -- Tag the event with the value.
-    returnA -< x <$ e
+      => Easing t -> t -> t -> t -> Spline t t m t
+tween f start end dur = spline start $ timeAsPercentageOf dur ~> var g
+    where g t = let c = end - start
+                    b = start
+                    x = f c t b
+                in if t <= 1.0 then Event x else NoEvent
 
--- Creates a tween that performs no interpolation over the duration.
+-- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
-         => a -> t -> Var m t (Event a)
-constant value duration = use value $ before duration
-
---------------------------------------------------------------------------------
--- $splines
--- If you plan on doing a lot of tweening it's probably easiest to build up
--- your tweens as splines using do-notation.
--- A spline in this context is a numeric computation that is "smooth" over some
--- domain. It is defined in a piecewise manner by sequencing other splines
--- together using do-notation.
--- You can then run the spline, transforming it back into a continuous
--- value stream.
---
--- @
--- thereAndBack = execSpline 0 $ do
---   x <- tweenTo easeOutExpo 0 100 1
---   tweenTo easeOutExpo x 0 1
--- @
---------------------------------------------------------------------------------
--- |
-tweenTo :: (Applicative m, Monad m, Fractional t, Ord t)
-        => Easing t -> t -> t -> t -> Spline t t m t
-tweenTo f start end dur = spline start $ tween f start end dur
+         => a -> t -> Spline t a m a
+constant value duration = spline value $ use value $ before duration
 
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)
                    => t -> Var m t t
-timeAsPercentageOf t = proc dt -> do
-    t' <- accumulate (+) 0 -< dt
-    returnA -< min 1 (t' / t)
+timeAsPercentageOf t = (\t' -> min 1 (t' / t)) <$> accumulate (+) 0
 
+--------------------------------------------------------------------------------
+-- $writing
+-- To create your own tweens just write a function that takes a start
+-- value, end value and a duration and return an event stream.
+--
+-- @
+-- tweenInOutExpo s e d = execSpline s $ do
+--     x <- tween easeInExpo s e (d/2)
+--     tween easeOutExpo x e (d/2)
+-- @
+--------------------------------------------------------------------------------
 -- | An easing function. The parameters or often named `c`, `t` and `b`,
 -- where `c` is the total change in value over the complete duration
 -- (endValue - startValue), `t` is the current percentage of the duration

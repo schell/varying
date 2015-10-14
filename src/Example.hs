@@ -16,9 +16,9 @@ data Point = Point { px :: Float
 tweenx :: (Applicative m, Monad m) => Spline Float Float m ()
 tweenx = do
     -- Tween from 0 to 100 over 1 second
-    x <- tweenTo easeOutExpo 0 100 1
+    x <- tween easeOutExpo 0 100 1
     -- Chain another tween back to the starting position
-    _ <- tweenTo easeOutExpo x 0 1
+    _ <- tween easeOutExpo x 0 1
     -- Loop forever
     tweenx
 
@@ -26,8 +26,8 @@ tweenx = do
 -- ends.
 tweeny :: (Applicative m, Monad m) => Spline Float Float m ()
 tweeny = do
-    y <- tweenTo easeOutQuad 0 100 1
-    _ <- tweenTo easeOutQuad y 0 1
+    y <- tween easeOutQuad 0 100 1
+    _ <- tween easeOutQuad y 0 1
     tweeny
 
 -- Our time signal that provides delta time samples.

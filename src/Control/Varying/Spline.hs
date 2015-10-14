@@ -8,13 +8,14 @@
 --  multiple piecewise event streams. A spline is a monadic layer on top of
 --  event streams which are only continuous over a certain domain. The idea
 --  is that we use do notation to "run an event stream" from which we will
---  consume produced values. Once the event stream inhibits the do-notation
---  computation completes and returns a result value. That result value is then
---  used to determine the next spline in the sequence. This allows us to build
---  up long, complex behaviors sequentially using a very familiar notation
---  that can then be easily turned into a continuous value stream with
---  'execSpline'.
-
+--  consume produced values. Once the event stream inhibits the computation
+--  completes and returns a result value. That result value is then
+--  used to determine the next spline in the sequence.
+--
+--  A spline can be converted back into a value stream using 'execSpline' or
+--  'execSplineT'. This allows us to build long, complex, sequential behaviors
+--  using familiar notation.
+--
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
