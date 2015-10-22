@@ -29,6 +29,7 @@ module Control.Varying.Spline (
     runSplineT,
     evalSplineT,
     execSplineT,
+    output,
     -- * Special operations.
     untilEvent,
     race,
@@ -248,6 +249,12 @@ capture (SplineT v) = capture' mempty v
               let mb' = if fb == mempty then mb else fb
                   ec' = (mb',) <$> ec
               return (Step fb ec', runSplineT $ capture' mb' v'')
+
+-- | Produce the argument as an output value exactly once, then return ().
+output :: (Applicative m, Monad m, Monoid (f b), Applicative f)
+       => b -> SplineT f a b m ()
+output b = SplineT $ Var $ \_ ->
+    return (Step (pure b) NoEvent, pure $ Step (pure b) $ Event ())
 
 -- | Map the output value of a spline.
 mapOutput :: (Functor f, Monoid (f t), Applicative m, Monad m)
