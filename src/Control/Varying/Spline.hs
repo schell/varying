@@ -258,6 +258,7 @@ output b = SplineT $ Var $ \_ ->
 
 -- | Map the output value of a spline.
 mapOutput :: (Functor f, Monoid (f t), Applicative m, Monad m)
-          => Var m a (f b -> f t) -> SplineT f a b m c -> SplineT f a t m c
+          => Var m a (b -> t) -> SplineT f a b m c -> SplineT f a t m c
 mapOutput _ (SplineTConst c) = SplineTConst c
-mapOutput vf (SplineT vx) = SplineT $ toIter <$> vf <*> vx
+mapOutput vf (SplineT vx) = SplineT $ toIter <$> vg <*> vx
+    where vg = (<$>) <$> vf

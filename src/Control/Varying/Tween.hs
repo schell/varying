@@ -151,7 +151,7 @@ tween f start end dur = spline start $ timeAsPercentageOf dur ~> var g
     where g t = let c = end - start
                     b = start
                     x = f c t b
-                in if t <= 1.0 then Event x else NoEvent
+                in if t >= 1.0 then NoEvent else Event x
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
@@ -161,7 +161,7 @@ constant value duration = spline value $ use value $ before duration
 -- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)
                    => t -> Var m t t
-timeAsPercentageOf t = (\t' -> min 1 (t' / t)) <$> accumulate (+) 0
+timeAsPercentageOf t = ((\t' -> min 1 (t' / t)) <$> accumulate (+) 0)
 
 --------------------------------------------------------------------------------
 -- $writing
