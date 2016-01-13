@@ -146,7 +146,7 @@ whileVar f a v = if f a
 
 -- | Iterate a 'Var' using a list of input until all input is consumed and
 -- output the result.
-stepMany :: (Monad m, Monoid a) => [a] -> Var m a b -> m (b, Var m a b)
+stepMany :: (Monad m, Functor m, Monoid a) => [a] -> Var m a b -> m (b, Var m a b)
 stepMany ([e]) y = runVar y e
 stepMany (e:es) y = execVar y e >>= stepMany es
 stepMany []     y = runVar y mempty
