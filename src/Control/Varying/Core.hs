@@ -33,6 +33,7 @@ module Control.Varying.Core (
     loopVar_,
     whileVar,
     whileVar_,
+    stepMany,
     -- * Testing value streams
     testVar,
     testVar_,
@@ -142,6 +143,13 @@ whileVar :: Monad m
 whileVar f a v = if f a
                  then runVar v a >>= uncurry (whileVar f)
                  else return a
+
+-- | Iterate a 'Var' using a list of input until all input is consumed and
+-- output the result.
+stepMany :: (Monad m, Monoid a) => [a] -> Var m a b -> m (b, Var m a b)
+stepMany ([e]) y = runVar y e
+stepMany (e:es) y = execVar y e >>= stepMany es
+stepMany []     y = runVar y mempty
 --------------------------------------------------------------------------------
 -- Testing and debugging
 --------------------------------------------------------------------------------

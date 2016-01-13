@@ -7,4 +7,4 @@ change log
 
 0.3.0.0 - updated the type of mapOutput to a more friendly, usable signature
           bug fixes
-
+0.3.1.0 - added stepMany
