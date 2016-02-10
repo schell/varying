@@ -46,11 +46,11 @@ tweeny = do
     tweeny
 
 -- Our time signal that provides delta time samples.
-time :: Var IO a Float
+time :: VarT IO a Float
 time = deltaUTC
 
 -- | Our Point value that varies over time continuously in x and y.
-backAndForth :: Var IO a Point
+backAndForth :: VarT IO a Point
 backAndForth =
     -- Turn our splines back into continuous value streams. We must provide
     -- a starting value since splines are not guaranteed to be defined at
@@ -70,8 +70,8 @@ main :: IO ()
 main = do
     putStrLn "Varying Example"
     loop backAndForth
-        where loop :: Var IO () Point -> IO ()
-              loop v = do (point, vNext) <- runVar v ()
+        where loop :: VarT IO () Point -> IO ()
+              loop v = do (point, vNext) <- runVarT v ()
                           printf "\nPoint %03.1f %03.1f" (px point) (py point)
                           loop vNext
 ```

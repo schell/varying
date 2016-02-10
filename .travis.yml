@@ -1,6 +1,29 @@
-language: haskell
-ghc: 7.8
+language: c
+
 sudo: false
+
+# GHC depends on GMP. You can add other dependencies here as well.
+addons:
+  apt:
+    packages:
+    - libgmp-dev
+
+# Cache stuff we build fast.
+cache:
+    directories:
+    - $HOME/.stack
+  
+before_install:
+# Download and unpack the stack exe
+- mkdir -p ~/.local/bin
+- export PATH=$HOME/.local/bin:$PATH
+# ghc
+- export PATH=/opt/ghc/$GHCVER/bin:$PATH
+- travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
+
+script:
+    - stack --no-terminal --install-ghc test 
+
 notifications:
     email: true
-    irc: irc.freenode.net#schellsan
+    irc: irc.freenode.net#schell

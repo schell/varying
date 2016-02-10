@@ -10,7 +10,7 @@ name:                varying
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.3.1.0
+version:             0.4.0.0
 
 -- A short (one-line) description of the package.
 synopsis:            FRP through value streams and monadic splines.
@@ -86,18 +86,40 @@ library
   default-language:    Haskell2010
 
 executable varying-example
-  ghc-options:         -Wall
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.7 && <4.9,
                        time >=1.5 && <1.6,
-                       transformers >= 0.4 && <0.5
+                       transformers >= 0.4 && <0.5,
+                       varying
 
 
   -- Directories containing source files.
-  hs-source-dirs:      src
+  hs-source-dirs:      app
 
-  main-is:             Example.hs
+  main-is:             Main.hs
+
+  -- Base language which the package is written in.
+  default-language:    Haskell2010
+
+test-suite varying-test
+  type:                exitcode-stdio-1.0
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+  -- Other library packages from which modules are imported.
+  build-depends:       base >=4.7 && <4.9
+                     , time >=1.5 && <1.6
+                     , transformers
+                     , varying
+                     , hspec
+                     , QuickCheck
+
+
+  -- Directories containing source files.
+  hs-source-dirs:      test
+
+  main-is:             Main.hs
 
   -- Base language which the package is written in.
   default-language:    Haskell2010

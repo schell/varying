@@ -15,13 +15,13 @@
 --   dreams).
 
 --
-{-# LANGUAGE Arrows #-}
 {-# LANGUAGE Rank2Types #-}
 module Control.Varying.Tween (
     -- * Creating tweens
     -- $creation
     tween,
     constant,
+    timeAsPercentageOf,
     -- * Interpolation functions
     -- $lerping
     linear,
@@ -127,7 +127,7 @@ linear c t b = c * t + b
 -- $creation
 -- The most direct route toward tweening values is to use 'tween'
 -- along with an interpolation function such as 'easeInExpo'. For example,
--- @tween easeInOutExpo 0 100 10@, this will create a spline that produces a
+-- @tween easeInExpo 0 100 10@, this will create a spline that produces a
 -- number interpolated from 0 to 100 over 10 seconds. At the end of the
 -- tween the spline will return the result value.
 --------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ linear c t b = c * t + b
 --
 -- @
 -- testWhile_ isEvent (deltaUTC ~> v)
---    where v :: Var IO a (Event Double)
+--    where v :: VarT IO a (Event Double)
 --          v = execSpline 0 $ tween easeOutExpo 0 100 5
 -- @
 --
@@ -146,22 +146,22 @@ linear c t b = c * t + b
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
 tween :: (Applicative m, Monad m, Fractional t, Ord t)
-      => Easing t -> t -> t -> t -> Spline t t m t
-tween f start end dur = spline start $ timeAsPercentageOf dur ~> var g
+      => Easing t -> t -> t -> t -> SplineT t t m t
+tween f start end dur = fromEvents start $ timeAsPercentageOf dur ~> var g
     where g t = let c = end - start
                     b = start
                     x = f c t b
-                in if t >= 1.0 then NoEvent else Event x
+                in if t > 1.0 then NoEvent else Event x
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
-         => a -> t -> Spline t a m a
-constant value duration = spline value $ use value $ before duration
+         => a -> t -> SplineT t a m a
+constant value duration = fromEvents value $ use value $ before duration
 
--- | Varies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
+-- | VarTies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)
-                   => t -> Var m t t
-timeAsPercentageOf t = ((\t' -> min 1 (t' / t)) <$> accumulate (+) 0)
+                   => t -> VarT m t t
+timeAsPercentageOf t = (/t) <$> accumulate (+) 0
 
 --------------------------------------------------------------------------------
 -- $writing
@@ -187,4 +187,4 @@ type Easing t = t -> t -> t -> t
 -- | A linear interpolation between two values over some duration.
 -- A `Tween` takes three values - a start value, an end value and
 -- a duration.
-type Tween m t = t -> t -> t -> Var m t (Event t)
+type Tween m t = t -> t -> t -> VarT m t (Event t)

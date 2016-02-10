@@ -1,0 +1,7 @@
+- patterns:
+  - .*\.hs$
+  - .*\.cabal$
+  commands:
+  - stack build
+  - hlint \0
+  - stack test

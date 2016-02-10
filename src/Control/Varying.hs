@@ -6,7 +6,7 @@
 --
 --  [@Core@]
 --  Get started writing value streams using the pure constructor 'var', the
---  monadic constructor 'varM' or the raw constructor 'Var'
+--  monadic constructor 'varM' or the raw constructor 'VarT'
 --
 --  [@Event@]
 --  Write event streams using the many event emitters and combinators.
