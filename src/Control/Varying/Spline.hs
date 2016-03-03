@@ -112,11 +112,9 @@ instance (Applicative m, Monad m) => Functor (SplineT a b m) where
     fmap f (SplineTConst c)  = SplineTConst $ f c
     fmap f (SplineT v) = SplineT $ fmap (fmap f) v
 
--- | A spline is an applicative if its output type is a monoid. It
--- responds to 'pure' by returning a spline that immediately returns the
--- argument. It responds to '<*>' by applying the left arguments eventual
--- value (the function) to the right arguments eventual value. The
--- output values will me combined with 'mappend'.
+-- A spline responds to 'pure' by returning a spline that immediately returns
+-- the argument. It responds to '<*>' by applying the left arguments result
+-- value (the function) to the right arguments result value (the argument).
 instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
     pure = SplineTConst
     (SplineTConst f) <*> (SplineTConst x) = SplineTConst $ f x
@@ -124,9 +122,8 @@ instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
     (SplineTConst f) <*> (SplineT vx) = SplineT $ fmap (fmap f) vx
     (SplineT vf) <*> (SplineT vx) = SplineT $ liftA2 (<*>) vf vx
 
--- | A spline is monad if its output type is a monoid. A spline responds
--- to bind by running until it produces an eventual value, then uses that
--- value to run the next spline.
+-- | A spline responds to bind by running until it produces an eventual value,
+-- then uses that value to run the next spline.
 instance (Applicative m, Monad m) => Monad (SplineT a b m) where
     return = pure
     (SplineTConst x) >>= f = f x
