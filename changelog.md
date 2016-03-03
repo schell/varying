@@ -12,3 +12,5 @@ change log
 
 0.4.0.0 - Var and Spline are now parameterized with Identity, removed mix, changed
           the behavior of race, added untilEvent variants, added tests.
+
+0.5.0.0 - changed stepMany to remove Monoid requirement

@@ -147,12 +147,12 @@ whileVar f a v = if f a
                  then runVarT v a >>= uncurry (whileVar f)
                  else return a
 
--- | Iterate a stream using a list of input until all input is consumed and
--- output the result.
-stepMany :: (Monad m, Functor m, Monoid a) => [a] -> VarT m a b -> m (b, VarT m a b)
-stepMany ([e]) y = runVarT y e
-stepMany (e:es) y = execVar y e >>= stepMany es
-stepMany []     y = runVarT y mempty
+-- | Iterate a stream over a list of input until all input is consumed,
+-- then iterate the stream using one single input. Returns the resulting
+-- output value and the new stream.
+stepMany :: (Monad m, Functor m) => [a] -> a -> VarT m a b -> m (b, VarT m a b)
+stepMany [] e v = runVarT v e
+stepMany (e:es) x v = execVar v e >>= stepMany es x
 
 -- | Run the stream over the input values, gathering the output values in a 
 -- list. 
