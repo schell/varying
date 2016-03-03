@@ -150,4 +150,4 @@ main = hspec $ do
         p = pure 1
 
     it "(right unit w/ const) m >>= return = m" $ equal (p >>= return) p
-    it "(right unit) m >>= return = m" $ equal mr m
+    it "(right unit) m >>= return = m" $ equal m mr

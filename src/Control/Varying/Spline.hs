@@ -132,6 +132,8 @@ instance (Applicative m, Monad m) => Monad (SplineT a b m) where
         case e of
             NoEvent -> return (Step b NoEvent, runSplineT $ SplineT v' >>= f)
             Event x -> runVarT (runSplineT $ f x) i
+            --Event x -> do (s, _) <- runVarT (runSplineT $ f x) i
+            --              return (s, runSplineT $ SplineTConst x)
 
 -- | A spline is a transformer and other monadic computations can be lifted
 -- int a spline.
