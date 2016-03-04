@@ -21,8 +21,8 @@ module Control.Varying.Core (
     mkState,
     -- * Composing value streams
     -- $composition
-    (<~),
-    (~>),
+    (<<<),
+    (>>>),
     -- * Adjusting and accumulating
     delay,
     accumulate,
@@ -48,7 +48,7 @@ module Control.Varying.Core (
 import Prelude hiding (id, (.))
 import Control.Arrow
 import Control.Category
-import Control.Monad 
+import Control.Monad
 import Control.Applicative
 import Data.Monoid
 import Data.Functor.Identity
@@ -154,8 +154,8 @@ stepMany :: (Monad m, Functor m) => [a] -> a -> VarT m a b -> m (b, VarT m a b)
 stepMany [] e v = runVarT v e
 stepMany (e:es) x v = execVar v e >>= stepMany es x
 
--- | Run the stream over the input values, gathering the output values in a 
--- list. 
+-- | Run the stream over the input values, gathering the output values in a
+-- list.
 scanVar :: (Applicative m, Monad m) => VarT m a b -> [a] -> m [b]
 scanVar v = liftM snd . foldM f (v,[])
     where f (v', outs) a = do (b, v'') <- runVarT v' a
@@ -190,15 +190,15 @@ testWhile_ f v = do
 -- by typing the input and hitting `return`.
 testVar :: (Read a, Show b) => VarT IO a b -> IO ()
 testVar v = loopVar_ $ varM (const $ putStrLn "input: ")
-                    ~> varM (const getLine)
-                    ~> var read
-                    ~> v
-                    ~> varM print
+                    >>> varM (const getLine)
+                    >>> var read
+                    >>> v
+                    >>> varM print
 
 -- | A utility function for testing streams that don't require input. Use
 -- this in GHCI to step through your streams using the `return` key.
 testVar_ :: Show b => VarT IO () b -> IO ()
-testVar_ v = loopVar_ $ pure () ~> v ~> varM print ~> varM (const getLine)
+testVar_ v = loopVar_ $ pure () >>> v >>> varM print >>> varM (const getLine)
 --------------------------------------------------------------------------------
 -- Adjusting and accumulating
 --------------------------------------------------------------------------------
@@ -220,26 +220,13 @@ delay b v = VarT $ \a -> return (b, go a v)
                                      return (b', go a' v'')
 --------------------------------------------------------------------------------
 -- $composition
--- You can compose value streams together using '~>' and '<~'. The "right plug"
--- ('~>') takes the output from a value stream on the left and "plugs" it
--- into the input of the value stream on the right. The "left plug" does
--- the same thing in the opposite direction. This allows you to write value
+-- You can compose value streams together using Arrow's '>>>' and '<<<'. The
+-- "right plug" ('>>>') takes the output from a value stream on the left and
+-- "plugs" it into the input of the value stream on the right. The "left plug"
+-- does the same thing in the opposite direction. This allows you to write value
 -- streams that read naturally.
 --------------------------------------------------------------------------------
--- | Same as '~>' with flipped parameters.
-(<~) :: Monad m => VarT m b c -> VarT m a b -> VarT m a c
-(<~) = flip (~>)
-infixl 1 <~
 
--- | Connects two streams by chaining the first's output into the input of the
--- second. This is the defacto stream composition method and in fact '.' is an
--- alias of '<~', which is just '~>' flipped.
-(~>) :: Monad m => VarT m a b -> VarT m b c -> VarT m a c
-(~>) v1 v2 = VarT $ \a -> do
-    (b, v1') <- runVarT v1 a
-    (c, v2') <- runVarT v2 b
-    return (c, v1' ~> v2')
-infixr 1 ~>
 --------------------------------------------------------------------------------
 -- Typeclass instances
 --------------------------------------------------------------------------------
@@ -248,23 +235,25 @@ infixr 1 ~>
 -- >  fmap (*3) $ accumulate (+) 0
 -- Will sum input values and then multiply the sum by 3.
 instance (Applicative m, Monad m) => Functor (VarT m b) where
-    fmap f' v = v ~> var f'
+    fmap f' v = v >>> var f'
 
 -- | A very simple category instance.
 --
 -- @
 --   id = var id
---   f . g = g ~> f
+--   f . g = g >>> f
 -- @
 -- or
 --
--- >  f . g = f <~ g
+-- >  f . g = f <<< g
 --
--- It is preferable for consistency (and readability) to use 'plug left' ('<~')
--- and 'plug right' ('~>') instead of ('.') where possible.
+-- It is preferable for consistency (and readability) to use 'plug left' ('<<<')
+-- and 'plug right' ('>>>') instead of ('.') where possible.
 instance (Applicative m, Monad m) => Category (VarT m) where
     id = var id
-    f . g = g ~> f
+    f0 . g0 = VarT $ \a -> do (b, g) <- runVarT g0 a
+                              (c, f) <- runVarT f0 b
+                              return (c, f . g)
 
 -- | Streams are applicative.
 --
@@ -300,7 +289,7 @@ instance (Applicative m, Monad m, Monoid b) => Monoid (VarT m a b) where
 
 -- | Streams can be written as numbers.
 --
--- >  let v = 1 ~> accumulate (+) 0
+-- >  let v = 1 >>> accumulate (+) 0
 -- which will sum the natural numbers.
 instance (Applicative m, Monad m, Num b) => Num (VarT m a b) where
     (+) = liftA2 (+)
@@ -312,7 +301,7 @@ instance (Applicative m, Monad m, Num b) => Num (VarT m a b) where
 
 -- | Streams can be written as floats.
 --
--- >  let v = pi ~> accumulate (*) 0.0
+-- >  let v = pi >>> accumulate (*) 0.0
 -- which will attempt (and succeed) to multiply pi by zero every step.
 instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
     pi = pure pi
@@ -324,7 +313,7 @@ instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
 
 -- | Streams can be written as fractionals.
 --
--- >  let v = 2.5 ~> accumulate (+) 0
+-- >  let v = 2.5 >>> accumulate (+) 0
 -- which will add 2.5 each step.
 instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
     (/) = liftA2 (/)
@@ -337,13 +326,13 @@ instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
 -- 'VarT'.
 type Var a b = VarT Identity a b
 
--- | A value stream is a structure that contains a value that changes over some 
+-- | A value stream is a structure that contains a value that changes over some
 -- input. It's a kind of Mealy machine (an automaton) with effects. Using
--- 'runVarT' with an input value of type 'a' yields a "step", which is a value 
+-- 'runVarT' with an input value of type 'a' yields a "step", which is a value
 -- of type 'b' and a new 'VarT' for yielding the next value.
 data VarT m a b =
      VarT { runVarT :: a -> m (b, VarT m a b)
-            -- ^ Given an input value, return a computation that effectfully 
-            -- produces an output value and a new stream for producing the next 
+            -- ^ Given an input value, return a computation that effectfully
+            -- produces an output value and a new stream for producing the next
             -- sample.
           }

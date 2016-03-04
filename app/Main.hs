@@ -47,10 +47,10 @@ backAndForth =
     -- Construct a varying Point that takes time as an input.
     (Point <$> x <*> y)
         -- Stream in a time signal using the 'plug left' combinator.
-        -- We could similarly use the 'plug right' (~>) function
+        -- We could similarly use the 'plug right' (>>>) function
         -- and put the time signal before the construction above. This is needed
         -- because the tween streams take time as an input.
-        <~ time
+        <<< time
 
 main :: IO ()
 main = do

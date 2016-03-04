@@ -49,8 +49,8 @@ import Control.Varying.Event
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
 import Control.Monad
+import Control.Arrow
 import Control.Applicative
-import Data.Monoid
 import Data.Functor.Identity
 
 -- | A discrete step in a continuous function. This type discretely describes
@@ -87,8 +87,9 @@ instance Monoid f => Applicative (Step f) where
 -- Much like the State monad it has an "internal state" and an eventual
 -- result value, where the internal state is the output value. The result
 -- value is used only in determining the next spline to sequence.
-data SplineT a b m c = SplineT { unSplineT :: VarT m a (Step (Event b) c) }
-                     | SplineTConst c
+data SplineT a b m c where
+  SplineT      :: VarT m a (Step (Event b) c) -> SplineT a b m c
+  SplineTConst :: c -> SplineT a b m c
 
 -- | Unwrap a spline into a value stream.
 runSplineT :: (Applicative m, Monad m)
@@ -131,7 +132,7 @@ instance (Applicative m, Monad m) => Monad (SplineT a b m) where
         (Step b e, v') <- runVarT v i
         case e of
             NoEvent -> return (Step b NoEvent, runSplineT $ SplineT v' >>= f)
-            Event x -> runVarT (runSplineT $ f x) i
+            Event x -> return (Step b NoEvent, runSplineT $ f x)
             --Event x -> do (s, _) <- runVarT (runSplineT $ f x) i
             --              return (s, runSplineT $ SplineTConst x)
 
@@ -149,7 +150,7 @@ instance (Functor m, Applicative m, MonadIO m) => MonadIO (SplineT a b m) where
 -- | Evaluates a spline into a value stream of its output type.
 outputStream :: (Applicative m, Monad m)
              => b -> SplineT a b m c -> VarT m a b
-outputStream x s = ((stepOutput <$>) $ runSplineT s) ~> foldStream (\_ y -> y) x
+outputStream x s = ((stepOutput <$>) $ runSplineT s) >>> foldStream (\_ y -> y) x
 
 -- | Evaluates a spline to an event stream of its result. The resulting
 -- value stream inhibits until the spline's domain is complete and then it
@@ -179,7 +180,7 @@ fromEvents x ve = SplineT $ VarT $ \a -> do
 untilEvent :: (Applicative m, Monad m)
            => VarT m a b -> VarT m a (Event c)
            -> SplineT a b m (b,c)
-untilEvent v ve = SplineT $ t ~> var (uncurry f)
+untilEvent v ve = SplineT $ t >>> var (uncurry f)
     where t = (,) <$> v <*> ve
           f b ec = case ec of
                        NoEvent -> Step (Event b) NoEvent

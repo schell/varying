@@ -122,7 +122,7 @@ foldStream f acc = VarT $ \e ->
 -- produce that value until a new input event produces. This always holds
 -- the last produced value, starting with the given value.
 -- @
--- time ~> after 3 ~> startingWith 0
+-- time >>> after 3 >>> startingWith 0
 -- @
 startingWith, startWith :: (Applicative m, Monad m) => a -> VarT m (Event a) a
 startingWith = startWith
@@ -151,7 +151,7 @@ dropE n ve = VarT $ \a -> do
 -- | Inhibit all events that don't pass the predicate.
 filterE :: (Applicative m, Monad m)
         => (b -> Bool) -> VarT m a (Event b) -> VarT m a (Event b)
-filterE p v = v ~> var check
+filterE p v = v >>> var check
     where check (Event b) = if p b then Event b else NoEvent
           check _ = NoEvent
 --------------------------------------------------------------------------------
@@ -160,8 +160,8 @@ filterE p v = v ~> var check
 -- | If the left event stream produces a value, wrap the value in 'Left' and
 -- produce that value, else if the right event stream produces a value,
 -- wrap the value in 'Right' and produce that value, else inhibit.
-eitherE :: (Applicative m, Monad m) 
-        => VarT m a (Event b) -> VarT m a (Event c) 
+eitherE :: (Applicative m, Monad m)
+        => VarT m a (Event b) -> VarT m a (Event c)
         -> VarT m a (Event (Either b c))
 eitherE vb vc = f <$> vb <*> vc
     where f (Event b) _ = Event $ Left b
@@ -192,7 +192,7 @@ switchByMode :: (Applicative m, Monad m, Eq b)
 switchByMode switch f = VarT $ \a -> do
     (b, _) <- runVarT switch a
     (_, v) <- runVarT (f b) a
-    runVarT (switchOnUnique v $ switch ~> onUnique) a
+    runVarT (switchOnUnique v $ switch >>> onUnique) a
         where switchOnUnique v sv = VarT $ \a -> do
                   (eb, sv') <- runVarT sv a
                   (c', v')  <- runVarT (vOf eb) a
@@ -211,7 +211,7 @@ onlyWhen :: (Applicative m, Monad m)
          -> (a -> Bool) -- ^ 'f' - The predicate to run on 'v''s input values.
          -> VarT m a (Event b)
 onlyWhen v f = v `onlyWhenE` hot
-    where hot = var id ~> onWhen f
+    where hot = var id >>> onWhen f
 
 -- | Produce events of a value stream 'v' only when an event stream 'h'
 -- produces an event.

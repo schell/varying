@@ -137,7 +137,7 @@ linear c t b = c * t + b
 -- resulting spline will take a time delta as input. For example:
 --
 -- @
--- testWhile_ isEvent (deltaUTC ~> v)
+-- testWhile_ isEvent (deltaUTC >>> v)
 --    where v :: VarT IO a (Event Double)
 --          v = execSpline 0 $ tween easeOutExpo 0 100 5
 -- @
@@ -147,7 +147,7 @@ linear c t b = c * t + b
 -- more than once ;)
 tween :: (Applicative m, Monad m, Fractional t, Ord t)
       => Easing t -> t -> t -> t -> SplineT t t m t
-tween f start end dur = fromEvents start $ timeAsPercentageOf dur ~> var g
+tween f start end dur = fromEvents start $ timeAsPercentageOf dur >>> var g
     where g t = let c = end - start
                     b = start
                     x = f c t b
