@@ -4,6 +4,7 @@ import Test.Hspec hiding (after)
 import Test.QuickCheck
 import Control.Varying
 import Data.Functor.Identity
+import Data.Time.Clock
 import Control.Monad.IO.Class
 
 main :: IO ()
@@ -41,6 +42,18 @@ main = hspec $ do
       it "should produce output exactly one time per call" $
         concat scans `shouldBe` "hey, there..."
 
+  describe "effect" $ do
+    let s :: SplineT () String IO ()
+        s = do step "Getting the time..."
+               utc <- effect "running" $ getCurrentTime
+               let t = head $ words $ show utc
+               step t
+               step "The End"
+    it "should step once, get the time and then step with a string of the time"
+       $ do utc <- getCurrentTime
+            let t = head $ words $ show utc
+            scans <- liftIO $ scanSpline s "" [(), (), ()]
+            scans `shouldBe` ["Getting the time...", t, "The End"]
   describe "race" $ do
       let s1 = do step "s10"
                   step "s11"
@@ -55,7 +68,7 @@ main = hspec $ do
                    Left i -> step $ "left won with " ++ show i
                    Right b -> step $ "right won with " ++ show b
           Identity scans = scanSpline r "" $ replicate 4 ()
-      it "scans" $ unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
+      it "should step twice and left should win" $ unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
 
   describe "capture" $ do
       let r :: Spline () String ()
@@ -68,7 +81,6 @@ main = hspec $ do
           scans = scanSpline r "" $ replicate 3 ()
       it "should end with the last value captured" $
           unwords (concat scans) `shouldBe` "a b True"
-
 
   describe "mapOutput" $ do
       let s :: Spline a Char ()
@@ -138,3 +150,7 @@ main = hspec $ do
 
     it "(right unit w/ const) m >>= return = m" $ equal (p >>= return) p
     it "(right unit) m >>= return = m" $ equal m mr
+    it "(right unit w/ monadic results) m >>= return = m" $
+      (scanVar (runSplineT m 0) [0..9])
+        `shouldBe` scanVar (runSplineT mr 0) [0..9]
+

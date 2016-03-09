@@ -30,11 +30,13 @@ module Control.Varying.Spline (
     resultStream,
     -- * Combinators
     step,
+    effect,
     untilEvent,
     untilEvent_,
     _untilEvent,
     _untilEvent_,
     race,
+    merge,
     capture,
     mapOutput,
     adjustInput,
@@ -47,14 +49,19 @@ import Control.Applicative
 import Data.Monoid
 import Data.Functor.Identity
 
+-- | 'SplineT' shares all the types of 'VarT' and adds a result value. Its
+-- monad, input and output types (@m@, @a@ and @b@, respectively) reflect the
+-- underlying 'VarT`. A spline adds a result type which represents the monadic
+-- computation's result value.
+-- Much like the State monad it has an "internal state" and an eventual
+-- result value, where the internal state is the output value. The result
+-- value is used only in determining the next spline to sequence.
 data SplineT a b m c where
   Pass :: c -> SplineT a b m c
   SplineT :: VarT m a (b, Event c) -> SplineT a b m c
 
-instance Monad m => Functor (SplineT a b m) where
-  fmap f (Pass c) = Pass $ f c
-  fmap f (SplineT v) = SplineT (((f <$>) <$>) <$> v)
-
+-- | Convert a spline into a stream of output value and eventual result value
+-- tuples. Requires a default output value in case none are produced.
 runSplineT :: Monad m => SplineT a b m c -> b -> VarT m a (b, Event c)
 runSplineT (Pass c) b = pure (b, Event c)
 runSplineT (SplineT v) _ = VarT $ \a -> do
@@ -64,6 +71,16 @@ runSplineT (SplineT v) _ = VarT $ \a -> do
               Event c -> Pass c
   return (o, runSplineT s b)
 
+-- | A spline is a functor by applying the function to the result.
+instance Monad m => Functor (SplineT a b m) where
+  fmap f (Pass c) = Pass $ f c
+  fmap f (SplineT v) = SplineT (((f <$>) <$>) <$> v)
+
+-- A spline responds to 'pure' by returning a spline that never produces an
+-- output value and immediately returns the argument. It responds to '<*>' by
+-- applying the left arguments result value (the function) to the right
+-- arguments result value (the argument). The left argument's output values
+-- are discarded.
 instance Monad m => Applicative (SplineT a b m) where
   pure = Pass
   (Pass f) <*> (Pass x) = Pass $ f x
@@ -75,15 +92,15 @@ instance Monad m => Applicative (SplineT a b m) where
     let s = SplineT vf1 <*> SplineT vx1
     return ((b, ef <*> ex), runSplineT s b)
 
+-- | A spline responds to bind by running until it produces an eventual value,
+-- then uses that value to run the next spline.
 instance Monad m => Monad (SplineT a b m) where
   return = pure
   (Pass x) >>= f = f x
   (SplineT v) >>= f = SplineT $ VarT $ \a -> do
     ((b, ec), v1) <- runVarT v a
-    let boundf = flip runSplineT b $ SplineT v1 >>= f
-        payload = (b, NoEvent)
     case ec of
-      NoEvent -> return (payload, boundf)
+      NoEvent -> return ((b, NoEvent), runSplineT (SplineT v1 >>= f) b)
       Event c -> runVarT (runSplineT (f c) b) a
 
 -- | Run the spline over the input values, gathering the output and result
@@ -153,6 +170,39 @@ race f (SplineT va) (SplineT vb) = SplineT $ VarT $ \i -> do
         (_,_)       -> return ( (c, NoEvent)
                          , runSplineT (race f (SplineT va1) (SplineT vb1)) c
                          )
+
+-- | Run two splines in parallel, combining their output. Once both splines
+-- have concluded, return the results of each in a tuple.
+merge :: (Applicative m, Monad m)
+     => (b -> b -> b) -> (c -> d -> e)
+     -> SplineT a b m c -> SplineT a b m d -> SplineT a b m e
+merge _ g (Pass c) (Pass d) = Pass $ g c d
+merge _ g (Pass c) s = g c <$> s
+merge _ g s (Pass d) = flip g d <$> s
+merge f g (SplineT v1) (SplineT v2) = SplineT $ VarT $ \a -> do
+  ((b1,e1), v3) <- runVarT v1 a
+  ((b2,e2), v4) <- runVarT v2 a
+  let b = f b1 b2
+  case (e1,e2) of
+    (Event c, Event d) -> let e = (b, Event $ g c d) in return (e, pure e)
+    (Event _, _) -> do let s = SplineT $ pure (b1,e1)
+                           sv4 = SplineT v4
+                       return ((b, NoEvent), runSplineT (merge f g s sv4) b)
+    (_, Event _) -> do let s = SplineT $ pure (b2,e2)
+                           sv3 = SplineT v3
+                       return ((b, NoEvent), runSplineT (merge f g sv3 s) b)
+    _ -> do let sv3 = SplineT v3
+                sv4 = SplineT v4
+            return ((b, NoEvent), runSplineT (merge f g sv3 sv4) b)
+
+-- | Run the side effect and use its result as the spline's result. This
+-- discards the output argument and switches immediately, but the argument is
+-- needed to construct the spline. For this reason spline's can't be an instance
+-- of MonadTrans or MonadIO.
+effect :: (Applicative m, Monad m) => b -> m x -> SplineT a b m x
+effect b f = SplineT $ VarT $ const $ do
+  x <- f
+  return ((b, Event x), pure (b, Event x))
 
 -- | Capture the spline's last output value and tuple it with the
 -- spline's result. This is helpful when you want to sample the last
