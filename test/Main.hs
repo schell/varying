@@ -68,7 +68,8 @@ main = hspec $ do
                    Left i -> step $ "left won with " ++ show i
                    Right b -> step $ "right won with " ++ show b
           Identity scans = scanSpline r "" $ replicate 4 ()
-      it "should step twice and left should win" $ unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
+      it "should step twice and left should win" $
+        unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
 
   describe "capture" $ do
       let r :: Spline () String ()
