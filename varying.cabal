@@ -77,8 +77,6 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.7 && <4.9,
                        time >=1.5 && <1.6,
-                       freer >= 0.2 && < 0.3,
-                       free >= 4.12 && < 4.13,
                        transformers >= 0.4 && <0.5
 
   -- Directories containing source files.
