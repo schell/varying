@@ -38,6 +38,7 @@ module Control.Varying.Event (
     always,
     never,
     -- * Switching
+    andThenWith,
     switchByMode,
     -- * Bubbling
     onlyWhen,
@@ -200,6 +201,15 @@ switchByMode switch f = VarT $ \a -> do
                       where vOf eb = case eb of
                                          NoEvent -> v
                                          Event b -> f b
+
+andThenWith :: (Applicative m, Monad m)
+            => VarT m a (Event b) -> (Event b -> VarT m a (Event b)) -> VarT m a (Event b)
+v `andThenWith` f = run v NoEvent
+  where run v1 eb = VarT $ \a -> do
+          (eb1, v2) <- runVarT v1 a
+          case eb1 of
+            NoEvent -> runVarT (f eb) a
+            _       -> return (eb1, run v2 eb1)
 --------------------------------------------------------------------------------
 -- Bubbling
 --------------------------------------------------------------------------------

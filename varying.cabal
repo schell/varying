@@ -77,6 +77,8 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.7 && <4.9,
                        time >=1.5 && <1.6,
+                       freer >= 0.2 && < 0.3,
+                       free >= 4.12 && < 4.13,
                        transformers >= 0.4 && <0.5
 
   -- Directories containing source files.
@@ -118,6 +120,26 @@ test-suite varying-test
 
   -- Directories containing source files.
   hs-source-dirs:      test
+
+  main-is:             Main.hs
+
+  -- Base language which the package is written in.
+  default-language:    Haskell2010
+
+benchmark varying-bench
+  type:                exitcode-stdio-1.0
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
+
+  -- Other library packages from which modules are imported.
+  build-depends:       base >=4.7 && <4.9
+                     , time >=1.5 && <1.6
+                     , transformers
+                     , varying
+                     , criterion
+
+
+  -- Directories containing source files.
+  hs-source-dirs:      bench
 
   main-is:             Main.hs
 

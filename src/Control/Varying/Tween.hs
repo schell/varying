@@ -147,16 +147,20 @@ linear c t b = c * t + b
 -- more than once ;)
 tween :: (Applicative m, Monad m, Fractional t, Ord t)
       => Easing t -> t -> t -> t -> SplineT t t m t
-tween f start end dur = fromEvents start $ timeAsPercentageOf dur >>> var g
-    where g t = let c = end - start
-                    b = start
-                    x = f c t b
-                in if t > 1.0 then NoEvent else Event x
+tween f start end dur =
+  let c = end - start
+      b = start
+      vt = h <$> timeAsPercentageOf dur
+      h t = if t >= 1.0
+            then (end, Event end)
+            else (f c t b, NoEvent)
+  in SplineT vt
+
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
          => a -> t -> SplineT t a m a
-constant value duration = fromEvents value $ use value $ before duration
+constant value duration = pure value `untilEvent_` after duration
 
 -- | VarTies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
 timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)

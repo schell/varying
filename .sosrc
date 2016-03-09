@@ -3,3 +3,4 @@
   - .*\.cabal$
   commands:
   - stack test
+  - hlint \0

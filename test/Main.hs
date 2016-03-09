@@ -4,6 +4,7 @@ import Test.Hspec hiding (after)
 import Test.QuickCheck
 import Control.Varying
 import Data.Functor.Identity
+import Control.Monad.IO.Class
 
 main :: IO ()
 main = hspec $ do
@@ -19,99 +20,85 @@ main = hspec $ do
 
   describe "tween" $
       it "should step by the dt passed in" $ do
-          let Identity scans = scanSpline (tween linear 0 4 (4 :: Float))
+          let Identity scans = scanSpline (tween linear 0 4 (4 :: Float)) 0
                                           [0,1,1,1,1,1]
-          scans `shouldBe` [(Event 0, NoEvent)
-                           ,(Event 1, NoEvent)
-                           ,(Event 2, NoEvent)
-                           ,(Event 3, NoEvent)
-                           ,(Event 4, NoEvent)
-                           ,(Event 4, Event 4)
-                           ]
+          scans `shouldBe` [0,1,2,3,4,4]
 
   describe "untilEvent" $ do
-      let Identity scans = scanSpline (3 `untilEvent` (1 >>> after 10))
+      let Identity scans = scanSpline (3 `untilEvent` (1 ~> after 10)) 0
                                       (replicate 10 ())
       it "should produce output from the value stream until event procs" $
-          head scans `shouldBe` (Event 3, NoEvent)
+          head scans `shouldBe` 3
       it "should produce output from the value stream until event procs" $
-          last scans `shouldBe` (Event 3, Event (3,()))
-
-  describe "pair" $ do
-      let s1 = 3 `untilEvent_` (1 >>> after 10)
-          s2 = do 4 `untilEvent_` (1 >>> after 10)
-                  5 `untilEvent_` (1 >>> after 10)
-          Identity scans = scanSpline (pair (+) s1 s2) $ replicate 20 ()
-      it "should end" $
-          length (takeWhile ((== NoEvent) . snd) scans) `shouldBe` 19
-      it "should combine output" $
-          head scans `shouldBe` (Event 7, NoEvent)
-      it "should progress" $
-          (scans !! 11) `shouldBe` (Event 8, NoEvent)
-      it "should pair both results" $
-          last scans `shouldBe` (Event 8, Event (3,5))
-
-  describe "race" $ do
-      let s1 = pure "a" `untilEvent_` (1 >>> after 3)
-          s2 = pure "x" `untilEvent_` (1 >>> after 4)
-          r  = race (++) s1 s2
-          Identity scans = scanSpline r $ replicate 20 ()
-      it "should combine output" $
-          head scans `shouldBe` (Event "ax", NoEvent)
-      it "should end" $
-          length (takeWhile ((== NoEvent) . snd) scans) `shouldBe` 2
-      it "should show \"a\" as winner" $
-          last scans `shouldBe` (Event "ax", Event (Left "a"))
-
-  describe "capture" $ do
-      let fstr str char = str ++ [char]
-          s = (1 >>> accumulate (+) (fromEnum 'a')
-                 >>> var toEnum
-                 >>> accumulate fstr "")
-                 `untilEvent_` (1 >>> after 3)
-          Identity scans = scanSpline (capture s) $ replicate 5 ()
-      it "should end with the last value captured" $
-          scans !! 2 `shouldBe` (Event "bcd", Event (Just "bcd", "bcd"))
+          last scans `shouldBe` 3
 
   describe "step" $ do
-      let s = step "hey"
-          Identity scans = scanSpline s $ replicate 3 ()
-      it "should produce exactly once" $ do
-          head scans `shouldBe` (Event "hey", NoEvent)
-          scans !! 1 `shouldBe` (Event "hey", Event ())
+      let s = do step "hey"
+                 step ", "
+                 step "there"
+                 step "."
+          Identity scans = scanSpline s "" $ replicate 6 ()
+      it "should produce output exactly one time per call" $
+        concat scans `shouldBe` "hey, there..."
+
+  describe "race" $ do
+      let s1 = do step "s10"
+                  step "s11"
+                  step "s12"
+                  return 1
+          s2 = do step "s20"
+                  step "s21"
+                  return True
+          r = do step "start"
+                 eIntBool <- race (\a b -> concat [a,":",b]) s1 s2
+                 case eIntBool of
+                   Left i -> step $ "left won with " ++ show i
+                   Right b -> step $ "right won with " ++ show b
+          Identity scans = scanSpline r "" $ replicate 4 ()
+      it "scans" $ unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
+
+  describe "capture" $ do
+      let r :: Spline () String ()
+          r = do x <- capture $ do step "a"
+                                   step "b"
+                                   return 2
+                 case x of
+                   (Just "b", 2) -> step "True"
+                   _ -> step "False"
+          scans = scanSpline r "" $ replicate 3 ()
+      it "should end with the last value captured" $
+          unwords (concat scans) `shouldBe` "a b True"
+
 
   describe "mapOutput" $ do
-      let s :: Spline () String String
-          s = pure "hey" `untilEvent_` never
-          f :: Int -> Char -> Int
-          f acc char = acc + fromEnum char
-          g :: String -> Int
-          g = foldl f 0
-          v :: Var () (String -> Int)
-          v = var $ const g
-          s' = mapOutput v s
-          Identity scans = scanSpline s' $ replicate 3 ()
+      let s :: Spline a Char ()
+          s = do step 'a'
+                 step 'b'
+                 step 'c'
+                 let f = pure toEnum
+                 mapOutput f $ do step 100
+                                  step 101
+                                  step 102
+                 step 'g'
+          Identity scans = scanSpline s 'x' $ replicate 7 ()
       it "should map the output" $
-          head scans `shouldBe` (Event 326, NoEvent)
+          scans `shouldBe` "abcdefg"
 
   describe "adjustInput" $ do
       let s = var id `untilEvent_` never
           v :: Var a (Char -> Int)
           v = pure fromEnum
           s' = adjustInput v s
-          Identity scans = scanSpline s' "abcd"
-      it "should" $ map fst scans `shouldBe` [ Event 97
-                                             , Event 98
-                                             , Event 99
-                                             , Event 100
-                                             ]
+          Identity scans = scanSpline s' 0 "abcd"
+      it "should" $ scans `shouldBe` [97,98,99,100]
 --------------------------------------------------------------------------------
 -- Adherance to typeclass laws
 --------------------------------------------------------------------------------
-  let inc = 1 >>> accumulate (+) 0
+  let inc = 1 ~> accumulate (+) 0
       sinc :: Spline a Int Int
-      sinc = inc `untilEvent_` (1 >>> after 3)
-      equal a b = (scanSpline a [0..9]) `shouldBe` (scanSpline b [0..9])
+      sinc = inc `untilEvent_` (1 ~> after 3)
+      go a = scanSpline a 0 [0..9]
+      equal a b = go a `shouldBe` go b
 
   describe "spline's functor instance" $ do
     let sincf = fmap id sinc
@@ -130,14 +117,14 @@ main = hspec $ do
         pfpx = pure (+1) <*> pure 1
         pfx = pure (1+1)
     it "(homomorphism) pure f <*> pure x = pure (f x)" $ equal pfpx pfx
-    let u :: Spline a () (Int -> Int)
-        u = pure () `_untilEvent` (use (+1) $ 1 >>> after 3)
+    let u :: Spline a Int (Int -> Int)
+        u = pure 66 `_untilEvent` (use (+1) $ 1 ~> after 3)
         upy = u <*> pure 1
         pyu = pure ($ 1) <*> u
     it "(interchange) u <*> pure y = pure ($ y) <*> u" $ equal upy pyu
-    let v :: Spline a () (Int -> Int)
-        v = pure () `_untilEvent` (use (1-) $ 1 >>> after 4)
-        w = pure () `_untilEvent` (use 3 $ 1 >>> after 1)
+    let v :: Spline a Int (Int -> Int)
+        v = pure 66 `_untilEvent` (use (1-) $ 1 ~> after 4)
+        w = pure 72 `_untilEvent` (use 3 $ 1 ~> after 1)
         pduvw = pure (.) <*> u <*> v <*> w
         uvw = u <*> (v <*> w)
     it "(compisition) pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $
@@ -146,7 +133,7 @@ main = hspec $ do
   describe "spline's monad instance" $ do
     let m = sinc
         mr = m >>= return
-        p :: Spline a () Int
+        p :: Spline a Int Int
         p = pure 1
 
     it "(right unit w/ const) m >>= return = m" $ equal (p >>= return) p

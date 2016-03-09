@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
@@ -16,11 +17,14 @@ module Control.Varying.Core (
     VarT(..),
     -- * Creating value streams
     -- $creation
+    done,
     var,
     varM,
     mkState,
     -- * Composing value streams
     -- $composition
+    (<~),
+    (~>),
     (<<<),
     (>>>),
     -- * Adjusting and accumulating
@@ -28,18 +32,10 @@ module Control.Varying.Core (
     accumulate,
     -- * Sampling value streams (running and other entry points)
     -- $running
-    evalVar,
-    execVar,
-    loopVar,
-    loopVar_,
-    whileVar,
-    whileVar_,
+    runVarT,
     scanVar,
     stepMany,
-    -- * Testing value streams
-    testVar,
-    testVar_,
-    testWhile_,
+    -- * Tracing value streams in flight
     vtrace,
     vstrace,
     vftrace,
@@ -89,6 +85,10 @@ import Debug.Trace
 var :: Applicative m => (a -> b) -> VarT m a b
 var f = VarT $ \a -> pure (f a, var f)
 
+-- | Lift a constant value into a stream.
+done :: Applicative m => b -> VarT m a b
+done = Done
+
 -- | Lift a monadic computation into a stream.
 varM :: Monad m => (a -> m b) -> VarT m a b
 varM f = VarT $ \a -> do
@@ -105,55 +105,21 @@ mkState f s = VarT $ \a -> do
   return (b', mkState f s')
 --------------------------------------------------------------------------------
 -- $running
--- The easiest way to sample a stream is to run it in the desired monad with
+-- To sample a stream simply run it in the desired monad with
 -- 'runVarT'. This will produce a sample value and a new stream.
 --
 -- > do (sample, v') <- runVarT v inputValue
---
--- Much like Control.Monad.State there are other entry points for running
--- value streams like 'evalVar', 'execVar'. There are also extra control
--- structures such as 'loopVar' and 'whileVar'.
+
 --------------------------------------------------------------------------------
--- | Iterate a stream once and return the sample value.
-evalVar :: Functor m => VarT m a b -> a -> m b
-evalVar v a = fst <$> runVarT v a
-
--- | Iterate a stream once and return the next stream.
-execVar :: Functor m => VarT m a b -> a -> m (VarT m a b)
-execVar v a = snd <$> runVarT v a
-
--- | Loop over a stream that takes no input value.
-loopVar_ :: (Functor m, Monad m) => VarT m () a -> m ()
-loopVar_ v = execVar v () >>= loopVar_
-
--- | Loop over a stream that produces its own next input value.
-loopVar :: Monad m => a -> VarT m a a -> m a
-loopVar a v = runVarT v a >>= uncurry loopVar
-
--- | Iterate a stream that requires no input until the given predicate fails.
-whileVar_ :: Monad m => (a -> Bool) -> VarT m () a -> m a
-whileVar_ f v = do
-   (a, v') <- runVarT v ()
-   if f a then whileVar_ f v' else return a
-
--- | Iterate a stream that produces its own next input value until the given
--- predicate fails.
-whileVar :: Monad m
-         => (a -> Bool) -- ^ The predicate to evaluate samples.
-         -> a -- ^ The initial input/sample value.
-         -> VarT m a a -- ^ The stream to iterate
-         -> m a -- ^ The last sample
-whileVar f a v = if f a
-                 then runVarT v a >>= uncurry (whileVar f)
-                 else return a
-
+runVarT :: Monad m => VarT m a b -> a -> m (b, VarT m a b)
+runVarT (Done b) _ = return (b, Done b)
+runVarT (VarT v) a = v a
 -- | Iterate a stream over a list of input until all input is consumed,
 -- then iterate the stream using one single input. Returns the resulting
 -- output value and the new stream.
 stepMany :: (Monad m, Functor m) => [a] -> a -> VarT m a b -> m (b, VarT m a b)
 stepMany [] e v = runVarT v e
-stepMany (e:es) x v = execVar v e >>= stepMany es x
-
+stepMany (e:es) x v = snd <$> runVarT v e >>= stepMany es x
 -- | Run the stream over the input values, gathering the output values in a
 -- list.
 scanVar :: (Applicative m, Monad m) => VarT m a b -> [a] -> m [b]
@@ -177,28 +143,6 @@ vstrace s = vftrace ((s ++) . show)
 -- This is very useful for debugging graphs of streams.
 vftrace :: Applicative a => (b -> String) -> VarT a b b
 vftrace f = var $ \b -> trace (f b) b
-
--- | A utility function for testing streams that don't require input. Runs
--- a stream printing each sample until the given predicate fails.
-testWhile_ :: Show a => (a -> Bool) -> VarT IO () a -> IO ()
-testWhile_ f v = do
-    (a, v') <- runVarT v ()
-    when (f a) $ print a >> testWhile_ f v'
-
--- | A utility function for testing streams that require input. The input
--- must have a 'Read' instance. Use this in GHCI to step through your streams
--- by typing the input and hitting `return`.
-testVar :: (Read a, Show b) => VarT IO a b -> IO ()
-testVar v = loopVar_ $ varM (const $ putStrLn "input: ")
-                    >>> varM (const getLine)
-                    >>> var read
-                    >>> v
-                    >>> varM print
-
--- | A utility function for testing streams that don't require input. Use
--- this in GHCI to step through your streams using the `return` key.
-testVar_ :: Show b => VarT IO () b -> IO ()
-testVar_ v = loopVar_ $ pure () >>> v >>> varM print >>> varM (const getLine)
 --------------------------------------------------------------------------------
 -- Adjusting and accumulating
 --------------------------------------------------------------------------------
@@ -220,13 +164,18 @@ delay b v = VarT $ \a -> return (b, go a v)
                                      return (b', go a' v'')
 --------------------------------------------------------------------------------
 -- $composition
--- You can compose value streams together using Arrow's '>>>' and '<<<'. The
--- "right plug" ('>>>') takes the output from a value stream on the left and
--- "plugs" it into the input of the value stream on the right. The "left plug"
--- does the same thing in the opposite direction. This allows you to write value
--- streams that read naturally.
+-- You can compose value streams together using Arrow's '>>>' and '<<<' or the
+-- synonyms '~>' and '<~'. The "right plug" ('>>>' and '~>') takes the output
+-- from a value stream on the left and "plugs" it into the input of the value
+-- stream on the right.
+-- The "left plug" does the same thing in the opposite direction. This allows
+-- you to write value streams that read naturally.
 --------------------------------------------------------------------------------
+(~>) :: Monad m => VarT m a b -> VarT m b c -> VarT m a c
+(~>) = (>>>)
 
+(<~) :: Monad m => VarT m b c -> VarT m a b -> VarT m a c
+(<~) = (<<<)
 --------------------------------------------------------------------------------
 -- Typeclass instances
 --------------------------------------------------------------------------------
@@ -235,7 +184,8 @@ delay b v = VarT $ \a -> return (b, go a v)
 -- >  fmap (*3) $ accumulate (+) 0
 -- Will sum input values and then multiply the sum by 3.
 instance (Applicative m, Monad m) => Functor (VarT m b) where
-    fmap f' v = v >>> var f'
+  fmap f (Done x) = Done $ f x
+  fmap f v = v >>> var f
 
 -- | A very simple category instance.
 --
@@ -259,7 +209,7 @@ instance (Applicative m, Monad m) => Category (VarT m) where
 --
 -- >  (,) <$> pure True <*> var "Applicative"
 instance (Applicative m, Monad m) => Applicative (VarT m a) where
-    pure = var . const
+    pure = done
     vf <*> va = VarT $ \a -> do (f, vf') <- runVarT vf a
                                 (b, va') <- runVarT va a
                                 return (f b, vf' <*> va')
@@ -330,9 +280,11 @@ type Var a b = VarT Identity a b
 -- input. It's a kind of Mealy machine (an automaton) with effects. Using
 -- 'runVarT' with an input value of type 'a' yields a "step", which is a value
 -- of type 'b' and a new 'VarT' for yielding the next value.
-data VarT m a b =
-     VarT { runVarT :: a -> m (b, VarT m a b)
-            -- ^ Given an input value, return a computation that effectfully
-            -- produces an output value and a new stream for producing the next
-            -- sample.
-          }
+data VarT m a b where
+  Done :: b -> VarT m a b
+          -- ^ Given a value, return a computation that yields a constant value
+          -- forever. You can also do this with the function 'done'.
+  VarT :: (a -> m (b, VarT m a b)) -> VarT m a b
+          -- ^ Given an input value, return a computation that effectfully
+          -- produces an output value and a new stream for producing the next
+          -- sample.

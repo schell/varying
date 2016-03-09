@@ -2,5 +2,6 @@ flags: {}
 extra-package-dbs: []
 packages: 
 - '.'
-extra-deps: []
+extra-deps: 
+- freer-0.2.2.4
 resolver: lts-5.2
