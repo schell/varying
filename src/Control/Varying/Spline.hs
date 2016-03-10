@@ -79,23 +79,21 @@ instance Monad m => Functor (SplineT a b m) where
 -- A spline responds to 'pure' by returning a spline that never produces an
 -- output value and immediately returns the argument. It responds to '<*>' by
 -- applying the left arguments result value (the function) to the right
--- arguments result value (the argument). The left argument's output values
--- are discarded.
+-- arguments result value (the argument), sequencing them both in serial.
 instance Monad m => Applicative (SplineT a b m) where
   pure = Pass
   (Pass f) <*> (Pass x) = Pass $ f x
   (Pass f) <*> (SplineT v) = f <$> SplineT v
   (SplineT vf) <*> (Pass x) = ($ x) <$> SplineT vf
-  (SplineT vf) <*> (SplineT vx) = SplineT $ VarT $ \a -> do
-    ((_,ef), vf1) <- runVarT vf a
-    ((b,ex), vx1) <- runVarT vx a
-    let s = SplineT vf1 <*> SplineT vx1
-    return ((b, ef <*> ex), runSplineT s b)
+  sf <*> sx = do
+    f <- sf
+    x <- sx
+    return $ f x
 
 -- | A spline responds to bind by running until it produces an eventual value,
 -- then uses that value to run the next spline.
 instance Monad m => Monad (SplineT a b m) where
-  return = pure
+  return = Pass
   (Pass x) >>= f = f x
   (SplineT v) >>= f = SplineT $ VarT $ \a -> do
     ((b, ec), v1) <- runVarT v a

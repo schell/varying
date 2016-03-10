@@ -172,5 +172,3 @@ main = hspec $ do
     it "(associativity) (m >>= f) >>= g == m >>= (\\x -> f x >>= g)" $
       (scanVar (runSplineT ((m >>= f) >>= g) "") [0..9])
         `shouldBe` scanVar (runSplineT (m >>= (\x -> f x >>= g)) "") [0..9]
-
-
