@@ -108,17 +108,17 @@ main = hspec $ do
 -- Adherance to typeclass laws
 --------------------------------------------------------------------------------
   let inc = 1 ~> accumulate (+) 0
-      sinc :: Spline a Int Int
-      sinc = inc `untilEvent_` (1 ~> after 3)
+      sinc :: Spline a Int (Int, Int)
+      sinc = inc `untilEvent` (1 ~> after 3)
       go a = scanSpline a 0 [0..9]
       equal a b = go a `shouldBe` go b
 
   describe "spline's functor instance" $ do
     let sincf = fmap id sinc
     it "fmap id = id" $ equal sinc sincf
-    let g :: Int -> Int
-        g x = x + 1
-        f x = x - 1
+    let g :: (Int, Int) -> (Int, Int)
+        g (x,y) = (x + 1, y)
+        f (x,y) = (x - 1, y)
         sdot = fmap (g . f) sinc
         sfdot = fmap g $ fmap f sinc
     it "fmap (g . f) = fmap g . fmap f" $ equal sdot sfdot
@@ -144,14 +144,33 @@ main = hspec $ do
       equal pduvw uvw
 
   describe "spline's monad instance" $ do
-    let m = sinc
-        mr = m >>= return
+    let h = sinc
+        hr = h >>= return
         p :: Spline a Int Int
         p = pure 1
 
-    it "(right unit w/ const) m >>= return = m" $ equal (p >>= return) p
-    it "(right unit) m >>= return = m" $ equal m mr
-    it "(right unit w/ monadic results) m >>= return = m" $
-      (scanVar (runSplineT m 0) [0..9])
-        `shouldBe` scanVar (runSplineT mr 0) [0..9]
+    it "(right identity w/ const) m >>= return == m" $ equal (p >>= return) p
+    it "(right identity) m >>= return == m" $ equal h hr
+    it "(right identity w/ monadic results) m >>= return == m" $
+      (scanVar (runSplineT h 0) [0..9])
+        `shouldBe` scanVar (runSplineT hr 0) [0..9]
+    let f :: Int -> Spline a String Bool
+        f x = do mapM_ (step . show) [0..x]
+                 return True
+    it "(left identity) return a >>= f == f a" $
+      (scanVar (runSplineT (return 3 >>= f) "") [0..9])
+        `shouldBe` scanVar (runSplineT (f 3) "") [0..9]
+    let m :: Spline a String Int
+        m = do step "hey"
+               step "dude"
+               return 2
+        g :: Bool -> Spline a String ()
+        g True = do step "okay"
+                    step "got it"
+        g False = do step "dang"
+                     step "missed it"
+    it "(associativity) (m >>= f) >>= g == m >>= (\\x -> f x >>= g)" $
+      (scanVar (runSplineT ((m >>= f) >>= g) "") [0..9])
+        `shouldBe` scanVar (runSplineT (m >>= (\x -> f x >>= g)) "") [0..9]
+
 
