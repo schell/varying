@@ -42,6 +42,14 @@ main = hspec $ do
       it "should produce output exactly one time per call" $
         concat scans `shouldBe` "hey, there..."
 
+  describe "fromEvent" $ do
+    let s = fromEvent $ var f ~> onJust
+        f 0 = Nothing
+        f 1 = Just "YES"
+        Identity scans = scanSpline s NoEvent [0,0,0,1,0]
+    it "should produce NoEvent until it procs" $
+      scans `shouldBe` [NoEvent,NoEvent,NoEvent,Event "YES",Event "YES"]
+
   describe "effect" $ do
     let s :: SplineT () String IO ()
         s = do step "Getting the time..."

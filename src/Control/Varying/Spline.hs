@@ -31,6 +31,7 @@ module Control.Varying.Spline (
     -- * Combinators
     step,
     effect,
+    fromEvent,
     untilEvent,
     untilEvent_,
     _untilEvent,
@@ -45,9 +46,11 @@ module Control.Varying.Spline (
 import Control.Varying.Core
 import Control.Varying.Event
 import Control.Monad
+import Control.Monad.Trans.Class
+import Control.Monad.IO.Class
 import Control.Applicative
-import Data.Monoid
 import Data.Functor.Identity
+import Data.Monoid
 
 -- | 'SplineT' shares all the types of 'VarT' and adds a result value. Its
 -- monad, input and output types (@m@, @a@ and @b@, respectively) reflect the
@@ -101,6 +104,15 @@ instance Monad m => Monad (SplineT a b m) where
       NoEvent -> return ((b, NoEvent), runSplineT (SplineT v1 >>= f) b)
       Event c -> runVarT (runSplineT (f c) b) a
 
+-- | A spline is a transformer if its output type is a Monoid.
+instance Monoid b => MonadTrans (SplineT a b) where
+  lift = effect mempty
+
+-- | A spline can do IO if its underlying monad has a MonadIO instance. It
+-- takes the result of the IO action as its immediate return value.
+instance (Monoid b, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
+  liftIO = lift . liftIO
+
 -- | Run the spline over the input values, gathering the output and result
 -- values in a list.
 scanSpline :: (Applicative m, Monad m)
@@ -119,6 +131,12 @@ outputStream s b = fst <$> runSplineT s b
 resultStream :: (Applicative m, Monad m)
              => SplineT a b m c -> b -> VarT m a (Event c)
 resultStream s b = snd <$> runSplineT s b
+
+-- | Create a spline from an event stream.
+fromEvent :: Monad m => VarT m a (Event b) -> SplineT a (Event b) m b
+fromEvent ve = SplineT $ f <$> ve
+  where f e = (e,e)
+
 -- | Create a spline from a value stream and an event stream. The spline
 -- uses the value stream as its output value. The spline will run until
 -- the event stream produces a value, at that point the last output
@@ -155,7 +173,8 @@ _untilEvent_ v ve = void $ _untilEvent v ve
 -- the spline that concludes first. If they conclude at the same time the result
 -- is taken from the left spline.
 race :: (Applicative m, Monad m)
-     => (a -> b -> c) -> SplineT i a m d -> SplineT i b m e -> SplineT i c m (Either d e)
+     => (a -> b -> c) -> SplineT i a m d -> SplineT i b m e
+     -> SplineT i c m (Either d e)
 race _ (Pass x) _ = Pass $ Left x
 race _ _ (Pass x) = Pass $ Right x
 race f (SplineT va) (SplineT vb) = SplineT $ VarT $ \i -> do
@@ -205,7 +224,7 @@ effect b f = SplineT $ VarT $ const $ do
 -- | Capture the spline's last output value and tuple it with the
 -- spline's result. This is helpful when you want to sample the last
 -- output value in order to determine the next spline to sequence.
-capture :: (Applicative m, Monad m, Eq b)
+capture :: (Applicative m, Monad m)
         => SplineT a b m c -> SplineT a b m (Maybe b, c)
 capture (Pass x) = Pass (Nothing, x)
 capture (SplineT v) = capture' v

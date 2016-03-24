@@ -114,12 +114,14 @@ mkState f s = VarT $ \a -> do
 runVarT :: Monad m => VarT m a b -> a -> m (b, VarT m a b)
 runVarT (Done b) _ = return (b, Done b)
 runVarT (VarT v) a = v a
+
 -- | Iterate a stream over a list of input until all input is consumed,
 -- then iterate the stream using one single input. Returns the resulting
 -- output value and the new stream.
-stepMany :: (Monad m, Functor m) => [a] -> a -> VarT m a b -> m (b, VarT m a b)
-stepMany [] e v = runVarT v e
-stepMany (e:es) x v = snd <$> runVarT v e >>= stepMany es x
+stepMany :: (Monad m, Functor m) => VarT m a b -> [a] -> a -> m (b, VarT m a b)
+stepMany v [] e = runVarT v e
+stepMany v (e:es) x = snd <$> runVarT v e >>= \v1 -> stepMany v1 es x
+
 -- | Run the stream over the input values, gathering the output values in a
 -- list.
 scanVar :: (Applicative m, Monad m) => VarT m a b -> [a] -> m [b]
