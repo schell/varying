@@ -37,6 +37,7 @@ module Control.Varying.Spline (
     _untilEvent,
     _untilEvent_,
     race,
+    raceMany,
     merge,
     capture,
     mapOutput,
@@ -187,6 +188,17 @@ race f (SplineT va) (SplineT vb) = SplineT $ VarT $ \i -> do
         (_,_)       -> return ( (c, NoEvent)
                          , runSplineT (race f (SplineT va1) (SplineT vb1)) c
                          )
+
+raceMany :: (Applicative m, Monad m, Monoid b)
+         => [SplineT a b m c] -> SplineT a b m c
+raceMany [] = pure mempty `_untilEvent` never
+--raceMany (Pass c:_) = Pass c
+raceMany ss = SplineT $ VarT $ \a -> do
+  let f (b, ec, ss1) s = do
+        ((b1, ec1), v1) <- runVarT (runSplineT s b) a
+        return (b <> b1, msum [ec, ec1], ss1 ++ [SplineT v1])
+  (b,ec,ss1) <- foldM f (mempty, NoEvent, []) ss
+  return ((b,ec), runSplineT (raceMany ss1) b)
 
 -- | Run two splines in parallel, combining their output. Once both splines
 -- have concluded, return the results of each in a tuple.

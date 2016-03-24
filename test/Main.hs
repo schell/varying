@@ -66,7 +66,7 @@ main = hspec $ do
       let s1 = do step "s10"
                   step "s11"
                   step "s12"
-                  return 1
+                  return (1 :: Int)
           s2 = do step "s20"
                   step "s21"
                   return True
@@ -78,6 +78,21 @@ main = hspec $ do
           Identity scans = scanSpline r "" $ replicate 4 ()
       it "should step twice and left should win" $
         unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
+
+  describe "raceMany" $ do
+    let s1 = do step "t"
+                step "c"
+                return 0
+        s2 = do step "h"
+                step "a"
+                return 1
+        s3 = do step "e"
+                step "t"
+                return (2 :: Int)
+        s = do x <- raceMany [s1,s2,s3]
+               step $ show x
+        Identity scans = scanSpline s "" $ replicate 3 ()
+    it "should output in parallel (mappend) and return the first or leftmost result" $ unwords scans `shouldBe` "the cat 0"
 
   describe "capture" $ do
       let r :: Spline () String ()
