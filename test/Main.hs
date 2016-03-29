@@ -1,6 +1,6 @@
 module Main where
 
-import Test.Hspec hiding (after)
+import Test.Hspec hiding (after, before)
 import Test.QuickCheck
 import Control.Varying
 import Data.Functor.Identity
@@ -9,6 +9,23 @@ import Control.Monad.IO.Class
 
 main :: IO ()
 main = hspec $ do
+  describe "before" $ do
+    it "should produce events before a given step" $ do
+      let Identity scans = scanVar (1 ~> before 3) $ replicate 4 ()
+      scans `shouldBe` [Event 1, Event 2, NoEvent, NoEvent]
+
+  describe "after" $ do
+    it "should produce events after a given step" $ do
+      let Identity scans = scanVar (1 ~> after 3) $ replicate 4 ()
+      scans `shouldBe` [NoEvent, NoEvent, Event 3, Event 4]
+  describe "anyE" $ do
+    it "should produce on any event" $ do
+      let v1 = use 1 (1 ~> before 2)
+          v2 = use 2 (1 ~> after 3)
+          v3 = always 3
+          v = anyE [v1,v2,v3]
+          Identity scans = scanVar v $ replicate 4 ()
+      scans `shouldBe` [Event 1, Event 3, Event 2, Event 2]
   describe "timeAsPercentageOf" $ do
       it "should run past 1.0" $ do
           let Identity scans = scanVar (timeAsPercentageOf 4)

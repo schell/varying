@@ -29,6 +29,7 @@ module Control.Varying.Event (
     startingWith, startWith,
     -- * Using multiple streams
     eitherE,
+    anyE,
     -- * List-like operations on event streams
     filterE,
     takeE,
@@ -50,6 +51,7 @@ import Control.Varying.Core
 import Control.Applicative
 import Control.Monad
 import Data.Monoid
+import Data.Foldable (foldl')
 --------------------------------------------------------------------------------
 -- Transforming event values into usable values
 --------------------------------------------------------------------------------
@@ -168,6 +170,16 @@ eitherE vb vc = f <$> vb <*> vc
     where f (Event b) _ = Event $ Left b
           f _ (Event c) = Event $ Right c
           f _ _ = NoEvent
+
+-- | Combine two event streams and produce an event any time either stream
+-- produces. In the case that both streams produce, this produces the event of
+-- the left stream.
+anyE :: Monad m => [VarT m a (Event b)] -> VarT m a (Event b)
+anyE [] = never
+anyE vs = VarT $ \a -> do
+  outs <- mapM (`runVarT` a) vs
+  let f (eb, vs1) (eb1, v) = (msum [eb, eb1], vs1 ++ [v])
+  return (anyE <$> foldl' f (NoEvent, []) outs)
 --------------------------------------------------------------------------------
 -- Primitive event streams
 --------------------------------------------------------------------------------
