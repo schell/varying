@@ -2,7 +2,7 @@ module Main where
 
 import Control.Varying
 import Control.Applicative
-import Text.Printf
+import Control.Concurrent (threadDelay, forkIO, killThread)
 import Data.Functor.Identity
 import Data.Time.Clock
 
@@ -20,7 +20,7 @@ newtype Delta = Delta { unDelta :: Float }
 tweenx :: (Applicative m, Monad m) => SplineT Float Float m Float
 tweenx = do
     -- Tween from 0 to 100 over 1 second
-    x <- tween easeOutExpo 0 100 1
+    x <- tween easeOutExpo 0 50 1
     -- Chain another tween back to the starting position
     _ <- tween easeOutExpo x 0 1
     -- Loop forever
@@ -30,8 +30,8 @@ tweenx = do
 -- ends.
 tweeny :: (Applicative m, Monad m) => SplineT Float Float m Float
 tweeny = do
-    y <- tween easeOutQuad 0 100 1
-    _ <- tween easeOutQuad y 0 1
+    y <- tween easeOutExpo 50 0 1
+    _ <- tween easeOutExpo y 50 1
     tweeny
 
 -- Our time signal counts input delta time samples.
@@ -58,14 +58,30 @@ backAndForth =
 main :: IO ()
 main = do
     putStrLn "An example of value streams using the varying library."
-    putStrLn "Enter a newline to continue, quit with ctrl+c"
+    putStrLn "Enter a newline to continue, and then a newline to quit"
     _ <- getLine
-    utc0 <- getCurrentTime
 
-    loop backAndForth utc0
-        where loop v utc1 = do utc2 <- getCurrentTime
-                               let dt = realToFrac $ diffUTCTime utc2 utc1
-                               (point, vNext) <- runVarT v $ Delta dt
-                               printf "\nPoint %03.1f %03.1f" (px point) (py point)
-                               loop vNext utc2
+    t   <- getCurrentTime
+    tId <- forkIO $ loop backAndForth t
+
+    _ <- getLine
+    killThread tId
+
+loop :: Var Delta Point -> UTCTime -> IO ()
+loop v t = do
+  t1 <- getCurrentTime
+  -- Here we'll run in the Identity monad using a fixed time step.
+  let dt = realToFrac $ diffUTCTime t1 t
+      Identity (Point x y, vNext) = runVarT v $ Delta dt
+      xStr = replicate (round x) ' ' ++ "x" ++ replicate (50 - round x) ' '
+      yStr = replicate (round y) ' ' ++ "y" ++ replicate (50 - round y) ' '
+      str  = zipWith f xStr yStr
+      f 'x' 'y' = '|'
+      f 'y' 'x' = '|'
+      f a ' ' = a
+      f ' ' b = b
+      f _ _ = ' '
+  putStrLn str
+  --threadDelay 10
+  loop vNext t1
 

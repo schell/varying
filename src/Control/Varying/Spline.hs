@@ -19,6 +19,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BangPatterns #-}
 module Control.Varying.Spline (
     -- * Spline
     Spline,
@@ -60,19 +62,21 @@ import Data.Monoid
 -- Much like the State monad it has an "internal state" and an eventual
 -- result value, where the internal state is the output value. The result
 -- value is used only in determining the next spline to sequence.
-data SplineT a b m c where
-  Pass :: c -> SplineT a b m c
-  SplineT :: VarT m a (b, Event c) -> SplineT a b m c
+data SplineT a b m c = Pass c
+                     | SplineT (VarT m a (b, Event c))
 
 -- | Convert a spline into a stream of output value and eventual result value
 -- tuples. Requires a default output value in case none are produced.
 runSplineT :: Monad m => SplineT a b m c -> b -> VarT m a (b, Event c)
+--runSplineT (SplineT v) _ = VarT $ runVarT v >=> \case
+--  ((b,NoEvent), v1) -> return ((b,NoEvent), runSplineT (SplineT v1) b)
+--  ((b,Event c), _)  -> return ((b, Event c), runSplineT (Pass c) b)
 runSplineT (Pass c) b = pure (b, Event c)
 runSplineT (SplineT v) _ = VarT $ \a -> do
   (o@(b,ec), v1) <- runVarT v a
-  let s = case ec of
-              NoEvent -> SplineT v1
-              Event c -> Pass c
+  let !s = case ec of
+             NoEvent -> SplineT v1
+             Event c -> Pass c
   return (o, runSplineT s b)
 
 -- | A spline is a functor by applying the function to the result.
@@ -118,7 +122,7 @@ instance (Monoid b, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
 -- values in a list.
 scanSpline :: (Applicative m, Monad m)
            => SplineT a b m c -> b -> [a] -> m [b]
-scanSpline s b = scanVar (outputStream s b)
+scanSpline s b = fmap fst <$> scanVar (outputStream s b)
 
 -- | A SplineT monad parameterized with Identity that takes input of type @a@,
 -- output of type @b@ and a result value of type @c@.

@@ -124,10 +124,10 @@ stepMany v (e:es) x = snd <$> runVarT v e >>= \v1 -> stepMany v1 es x
 
 -- | Run the stream over the input values, gathering the output values in a
 -- list.
-scanVar :: (Applicative m, Monad m) => VarT m a b -> [a] -> m [b]
-scanVar v = liftM snd . foldM f (v,[])
-    where f (v', outs) a = do (b, v'') <- runVarT v' a
-                              return (v'', outs ++ [b])
+scanVar :: (Applicative m, Monad m) => VarT m a b -> [a] -> m ([b], VarT m a b)
+scanVar v = foldM f ([], v)
+    where f (outs, v') a = do (b, v'') <- runVarT v' a
+                              return (outs ++ [b], v'')
 --------------------------------------------------------------------------------
 -- Testing and debugging
 --------------------------------------------------------------------------------
@@ -282,11 +282,10 @@ type Var a b = VarT Identity a b
 -- input. It's a kind of Mealy machine (an automaton) with effects. Using
 -- 'runVarT' with an input value of type 'a' yields a "step", which is a value
 -- of type 'b' and a new 'VarT' for yielding the next value.
-data VarT m a b where
-  Done :: b -> VarT m a b
-          -- ^ Given a value, return a computation that yields a constant value
-          -- forever. You can also do this with the function 'done'.
-  VarT :: (a -> m (b, VarT m a b)) -> VarT m a b
-          -- ^ Given an input value, return a computation that effectfully
-          -- produces an output value and a new stream for producing the next
-          -- sample.
+data VarT m a b = Done b
+                  -- ^ Given a value, return a computation that yields a constant value
+                  -- forever. You can also do this with the function 'done'.
+                | VarT (a -> m (b, VarT m a b))
+                  -- ^ Given an input value, return a computation that effectfully
+                  -- produces an output value and a new stream for producing the next
+                  -- sample.
