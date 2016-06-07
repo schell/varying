@@ -11,29 +11,34 @@ main :: IO ()
 main = hspec $ do
   describe "before" $ do
     it "should produce events before a given step" $ do
-      let Identity scans = scanVar (1 ~> before 3) $ replicate 4 ()
+      let varEv :: Var () (Event Int)
+          varEv = 1 ~> before 3
+          scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
       scans `shouldBe` [Event 1, Event 2, NoEvent, NoEvent]
 
   describe "after" $ do
     it "should produce events after a given step" $ do
-      let Identity scans = scanVar (1 ~> after 3) $ replicate 4 ()
+      let varEv :: Var () (Event Int)
+          varEv = 1 ~> after 3
+          scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
       scans `shouldBe` [NoEvent, NoEvent, Event 3, Event 4]
   describe "anyE" $ do
     it "should produce on any event" $ do
-      let v1 = use 1 (1 ~> before 2)
+      let v1,v2,v3 :: Var () (Event Int)
+          v1 = use 1 (1 ~> before 2)
           v2 = use 2 (1 ~> after 3)
           v3 = always 3
           v = anyE [v1,v2,v3]
-          Identity scans = scanVar v $ replicate 4 ()
+          scans = fst $ runIdentity $ scanVar v $ replicate 4 ()
       scans `shouldBe` [Event 1, Event 3, Event 2, Event 2]
   describe "timeAsPercentageOf" $ do
       it "should run past 1.0" $ do
-          let Identity scans = scanVar (timeAsPercentageOf 4)
-                                       [1,1,1,1,1 :: Float]
+          let scans = fst $ runIdentity $ scanVar (timeAsPercentageOf 4)
+                                                  [1,1,1,1,1 :: Float]
           last scans `shouldSatisfy` (> 1)
       it "should progress by increments of the total" $ do
-          let Identity scans = scanVar (timeAsPercentageOf 4)
-                                       [1,1,1,1,1 :: Float]
+          let scans = fst $ runIdentity $ scanVar (timeAsPercentageOf 4)
+                                                  [1,1,1,1,1 :: Float]
           scans `shouldBe` [0.25,0.5,0.75,1.0,1.25 :: Float]
 
   describe "tween" $
@@ -192,14 +197,14 @@ main = hspec $ do
     it "(right identity w/ const) m >>= return == m" $ equal (p >>= return) p
     it "(right identity) m >>= return == m" $ equal h hr
     it "(right identity w/ monadic results) m >>= return == m" $
-      (scanVar (runSplineT h 0) [0..9])
-        `shouldBe` scanVar (runSplineT hr 0) [0..9]
+      scanSpline h 0 [0..9 :: Int]
+        `shouldBe` scanSpline hr 0 [0..9 :: Int]
     let f :: Int -> Spline a String Bool
         f x = do mapM_ (step . show) [0..x]
                  return True
     it "(left identity) return a >>= f == f a" $
-      (scanVar (runSplineT (return 3 >>= f) "") [0..9])
-        `shouldBe` scanVar (runSplineT (f 3) "") [0..9]
+      scanSpline (return 3 >>= f) "" [0..9 :: Int]
+        `shouldBe` scanSpline (f 3) "" [0..9 :: Int]
     let m :: Spline a String Int
         m = do step "hey"
                step "dude"
@@ -210,5 +215,5 @@ main = hspec $ do
         g False = do step "dang"
                      step "missed it"
     it "(associativity) (m >>= f) >>= g == m >>= (\\x -> f x >>= g)" $
-      (scanVar (runSplineT ((m >>= f) >>= g) "") [0..9])
-        `shouldBe` scanVar (runSplineT (m >>= (\x -> f x >>= g)) "") [0..9]
+      scanSpline ((m >>= f) >>= g) "" [0..9 :: Int]
+        `shouldBe` scanSpline (m >>= (\x -> f x >>= g)) "" [0..9 :: Int]

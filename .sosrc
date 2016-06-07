@@ -2,7 +2,8 @@
   - .*\.hs$
   - .*\.cabal$
   commands:
-  - stack build --executable-profiling --library-profiling --ghc-options="-fprof-auto"
-  - hlint \0 
-  - stack exec varying-example -- +RTS -p -hc -sstderr
-  - ./pack-profiling.sh
+  - stack test --fast
+#  - stack build --executable-profiling --library-profiling --ghc-options="-fprof-auto"
+#  - hlint \0 
+#  - stack exec varying-example -- +RTS -p -hc -sstderr
+#  - ./pack-profiling.sh
