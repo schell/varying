@@ -75,8 +75,8 @@ library
   -- other-extensions:
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.7 && <4.9,
-                       transformers >= 0.4 && <0.5
+  build-depends:       base >=4.6
+                     , transformers >= 0.3
 
   -- Directories containing source files.
   hs-source-dirs:      src
@@ -88,10 +88,10 @@ executable varying-example
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.7 && <4.9,
-                       transformers >= 0.4 && <0.5,
-                       time >= 1.5 && < 1.6,
-                       varying
+  build-depends:       base >=4.6
+                     , transformers >= 0.3
+                     , time >= 1.4
+                     , varying
 
 
   -- Directories containing source files.
@@ -107,8 +107,8 @@ test-suite varying-test
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.7 && <4.9
-                     , time >=1.5 && <1.6
+  build-depends:       base >=4.6
+                     , time >=1.4
                      , transformers
                      , varying
                      , hspec
@@ -128,8 +128,8 @@ benchmark varying-bench
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.7 && <4.9
-                     , time >=1.5 && <1.6
+  build-depends:       base >=4.6
+                     , time >=1.4 
                      , transformers
                      , varying
                      , criterion

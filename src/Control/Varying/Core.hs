@@ -150,7 +150,7 @@ vftrace f = var $ \b -> trace (f b) b
 --------------------------------------------------------------------------------
 -- | Accumulates input values using a folding function and yields
 -- that accumulated value each sample.
-accumulate :: Monad m => (c -> b -> c) -> c -> VarT m b c
+accumulate :: (Monad m, Applicative m) => (c -> b -> c) -> c -> VarT m b c
 accumulate f b = VarT $ \a -> do
     let b' = f b a
     return (b', accumulate f b')
@@ -160,7 +160,7 @@ accumulate f b = VarT $ \a -> do
 -- themselves for values. For example:
 --
 -- > let v = 1 + delay 0 v in testVar_ v
-delay :: Monad m => b -> VarT m a b -> VarT m a b
+delay :: (Monad m, Applicative m) => b -> VarT m a b -> VarT m a b
 delay b v = VarT $ \a -> return (b, go a v)
     where go a v' = VarT $ \a' -> do (b', v'') <- runVarT v' a
                                      return (b', go a' v'')
@@ -173,10 +173,10 @@ delay b v = VarT $ \a -> return (b, go a v)
 -- The "left plug" does the same thing in the opposite direction. This allows
 -- you to write value streams that read naturally.
 --------------------------------------------------------------------------------
-(~>) :: Monad m => VarT m a b -> VarT m b c -> VarT m a c
+(~>) :: (Monad m, Applicative m) => VarT m a b -> VarT m b c -> VarT m a c
 (~>) = (>>>)
 
-(<~) :: Monad m => VarT m b c -> VarT m a b -> VarT m a c
+(<~) :: (Monad m, Applicative m) => VarT m b c -> VarT m a b -> VarT m a c
 (<~) = (<<<)
 --------------------------------------------------------------------------------
 -- Typeclass instances

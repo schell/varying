@@ -2,7 +2,7 @@ module Main where
 
 import Control.Varying
 import Control.Applicative
-import Control.Concurrent (threadDelay, forkIO, killThread)
+import Control.Concurrent (forkIO, killThread)
 import Data.Functor.Identity
 import Data.Time.Clock
 
