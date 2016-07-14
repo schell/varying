@@ -10,7 +10,7 @@ name:                varying
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.5.0.1
+version:             0.5.0.2
 
 -- A short (one-line) description of the package.
 synopsis:            FRP through value streams and monadic splines.
@@ -75,8 +75,8 @@ library
   -- other-extensions:
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6
-                     , transformers >= 0.3
+  build-depends:       base >=4.6 && <5.0
+                     , transformers >=0.3
 
   -- Directories containing source files.
   hs-source-dirs:      src
@@ -88,9 +88,9 @@ executable varying-example
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6
-                     , transformers >= 0.3
-                     , time >= 1.4
+  build-depends:       base >=4.6 && <5.0
+                     , transformers >=0.3
+                     , time >=1.4
                      , varying
 
 
@@ -107,7 +107,7 @@ test-suite varying-test
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6
+  build-depends:       base >=4.6 && <5.0
                      , time >=1.4
                      , transformers
                      , varying
@@ -129,7 +129,7 @@ benchmark varying-bench
 
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.6
-                     , time >=1.4 
+                     , time >=1.4
                      , transformers
                      , varying
                      , criterion

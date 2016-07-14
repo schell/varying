@@ -20,6 +20,7 @@ module Control.Varying.Tween (
     -- * Creating tweens
     -- $creation
     tween,
+    tween_,
     constant,
     timeAsPercentageOf,
     -- * Interpolation functions
@@ -60,68 +61,68 @@ import Control.Applicative
 --------------------------------------------------------------------------------
 
 -- | Ease in quadratic.
-easeInQuad :: Num t => Easing t
-easeInQuad c t b =  c * t*t + b
+easeInQuad :: (Num t, Fractional t, Real f) => Easing t f
+easeInQuad c t b =  c * (realToFrac $ t*t) + b
 
 -- | Ease out quadratic.
-easeOutQuad :: Num t => Easing t
-easeOutQuad c t b =  (-c) * (t * (t - 2)) + b
+easeOutQuad :: (Num t, Fractional t, Real f) => Easing t f
+easeOutQuad c t b =  (-c) * (realToFrac $ t * (t - 2)) + b
 
 -- | Ease in cubic.
-easeInCubic :: Num t => Easing t
-easeInCubic c t b =  c * t*t*t + b
+easeInCubic :: (Num t, Fractional t, Real f) => Easing t f
+easeInCubic c t b =  c * (realToFrac $ t*t*t) + b
 
 -- | Ease out cubic.
-easeOutCubic :: Num t => Easing t
-easeOutCubic c t b =  let t' = t - 1 in c * (t'*t'*t' + 1) + b
+easeOutCubic :: (Num t, Fractional t, Real f) => Easing t f
+easeOutCubic c t b =  let t' = realToFrac t - 1 in c * (t'*t'*t' + 1) + b
 
 -- | Ease in by some power.
-easeInPow :: Num t => Int -> Easing t
-easeInPow power c t b =  c * (t^power) + b
+easeInPow :: (Num t, Fractional t, Real f) => Int -> Easing t f
+easeInPow power c t b =  c * (realToFrac t^power) + b
 
 -- | Ease out by some power.
-easeOutPow :: Num t => Int -> Easing t
+easeOutPow :: (Num t, Fractional t, Real f) => Int -> Easing t f
 easeOutPow power c t b =
-    let t' = t - 1
+    let t' = realToFrac t - 1
         c' = if power `mod` 2 == 1 then c else -c
         i  = if power `mod` 2 == 1 then 1 else -1
     in c' * ((t'^power) + i) + b
 
 -- | Ease in sinusoidal.
-easeInSine :: Floating t => Easing t
-easeInSine c t b =  let cos' = cos (t * (pi / 2))
+easeInSine :: (Floating t, Real f) => Easing t f
+easeInSine c t b =  let cos' = cos (realToFrac t * (pi / 2))
                                in -c * cos' + c + b
 
 -- | Ease out sinusoidal.
-easeOutSine :: Floating t => Easing t
-easeOutSine c t b =  let cos' = cos (t * (pi / 2)) in c * cos' + b
+easeOutSine :: (Floating t, Real f) => Easing t f
+easeOutSine c t b =  let cos' = cos (realToFrac t * (pi / 2)) in c * cos' + b
 
 -- | Ease in and out sinusoidal.
-easeInOutSine :: Floating t => Easing t
-easeInOutSine c t b =  let cos' = cos (pi * t)
+easeInOutSine :: (Floating t, Real f) => Easing t f
+easeInOutSine c t b =  let cos' = cos (pi * realToFrac t)
                                   in (-c / 2) * (cos' - 1) + b
 
 -- | Ease in exponential.
-easeInExpo :: Floating t => Easing t
-easeInExpo c t b =  let e = 10 * (t - 1) in c * (2**e) + b
+easeInExpo :: (Floating t, Real f) => Easing t f
+easeInExpo c t b =  let e = 10 * (realToFrac t - 1) in c * (2**e) + b
 
 -- | Ease out exponential.
-easeOutExpo :: Floating t => Easing t
-easeOutExpo c t b =  let e = -10 * t in c * (-(2**e) + 1) + b
+easeOutExpo :: (Floating t, Real f) => Easing t f
+easeOutExpo c t b =  let e = -10 * realToFrac t in c * (-(2**e) + 1) + b
 
 -- | Ease in circular.
-easeInCirc :: Floating t => Easing t
-easeInCirc c t b = let s = sqrt (1 - t*t) in -c * (s - 1) + b
+easeInCirc :: (Floating t, Real f, Floating f) => Easing t f
+easeInCirc c t b = let s = realToFrac $ sqrt (1 - t*t) in -c * (s - 1) + b
 
 -- | Ease out circular.
-easeOutCirc :: Floating t => Easing t
-easeOutCirc c t b = let t' = (t - 1)
+easeOutCirc :: (Floating t, Real f) => Easing t f
+easeOutCirc c t b = let t' = (realToFrac t - 1)
                         s  = sqrt (1 - t'*t')
                     in c * s + b
 
 -- | Ease linear.
-linear :: Num t => Easing t
-linear c t b = c * t + b
+linear :: (Floating t, Real f) => Easing t f
+linear c t b = c * (realToFrac t) + b
 
 --------------------------------------------------------------------------------
 -- $creation
@@ -145,8 +146,8 @@ linear c t b = c * t + b
 -- Keep in mind `tween` must be fed time deltas, not absolute time or
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
-tween :: (Applicative m, Monad m, Fractional t, Ord t)
-      => Easing t -> t -> t -> t -> SplineT t t m t
+tween :: (Applicative m, Monad m, Num t, Fractional f, Ord f)
+      => Easing t f -> t -> t -> f -> SplineT f t m t
 tween f start end dur =
   let c = end - start
       b = start
@@ -156,6 +157,15 @@ tween f start end dur =
             else (f c t b, NoEvent)
   in SplineT vt
 
+-- | A version of 'tween' that discards the result. It is simply
+--
+-- @
+-- tween f a b c >> return ()
+-- @
+--
+tween_ :: (Applicative m, Monad m, Num t, Fractional f, Ord f)
+       => Easing t f -> t -> t -> f -> SplineT f t m ()
+tween_ f a b c = tween f a b c >> return ()
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
@@ -186,9 +196,9 @@ timeAsPercentageOf t = (/t) <$> accumulate (+) 0
 -- To make things simple only numerical values can be tweened and the type
 -- of time deltas much match the tween's value type. This may change in the
 -- future :)
-type Easing t = t -> t -> t -> t
+type Easing t f = t -> f -> t -> t
 
 -- | A linear interpolation between two values over some duration.
 -- A `Tween` takes three values - a start value, an end value and
 -- a duration.
-type Tween m t = t -> t -> t -> VarT m t (Event t)
+type Tween m t f = t -> t -> f -> VarT m f (Event t)

@@ -26,7 +26,9 @@ module Control.Varying.Spline (
     Spline,
     -- * Spline Transformer
     SplineT(..),
+    -- * Running and streaming
     runSplineT,
+    runSplineE,
     scanSpline,
     outputStream,
     resultStream,
@@ -78,6 +80,16 @@ runSplineT (SplineT v) _ = VarT $ \a -> do
              NoEvent -> SplineT v1
              Event c -> Pass c
   return (o, runSplineT s b)
+
+-- | Run a spline without converting it into a stream. Produces either an output
+-- value on the left or the result value on the right.
+runSplineE :: Monad m => SplineT a b m c -> a -> m (Either b c, SplineT a b m c)
+runSplineE (Pass c) _ = return (Right c, Pass c)
+runSplineE (SplineT v) a = do
+  ((b, ev), v1) <- runVarT v a
+  return $ case ev of
+    NoEvent -> (Left b, SplineT v1)
+    Event c -> (Right c, Pass c)
 
 -- | A spline is a functor by applying the function to the result.
 instance Monad m => Functor (SplineT a b m) where
