@@ -1,10 +1,12 @@
 import Control.Varying
 import Control.Monad
+import Control.Applicative
+import Data.Functor.Identity
 import Criterion.Main
 
 main :: IO ()
 main = do
-    let run v a = fst <$> runVarT v a
+    let run v a = runIdentity (fst <$> runVarT v a)
     defaultMain $ [ bgroup "runVarT" [ bench "1" $ nf (run $ chain 1) 0
                                      , bench "2" $ nf (run $ chain 2) 0
                                      , bench "4" $ nf (run $ chain 4) 0

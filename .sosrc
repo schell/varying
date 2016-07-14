@@ -13,8 +13,8 @@
   - .*\.l?hs$
   - .*\.cabal
   commands:
-  - stack --resolver lts-1   --install-ghc test  --fast # for ghc 7.6
-  - stack --resolver lts-2   --install-ghc test  --fast # for ghc 7.8
-  - stack --resolver lts-3   --install-ghc test  --fast # for ghc 7.10.2
-  - stack --resolver lts-5   --install-ghc test  --fast # for ghc 7.10.3
-  - stack --resolver nightly --install-ghc build --fast
+  - stack --resolver lts-1   --install-ghc bench --fast # for ghc 7.6
+  - stack --resolver lts-2   --install-ghc bench --fast # for ghc 7.8
+  - stack --resolver lts-3   --install-ghc bench --fast # for ghc 7.10.2
+  - stack --resolver lts-5   --install-ghc bench --fast # for ghc 7.10.3
+  - stack --resolver nightly --install-ghc bench --fast
