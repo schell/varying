@@ -2,6 +2,7 @@ module Main where
 
 import Test.Hspec hiding (after, before)
 import Test.QuickCheck
+import Control.Applicative
 import Control.Varying
 import Data.Functor.Identity
 import Data.Time.Clock
@@ -124,9 +125,9 @@ main = hspec $ do
                  case x of
                    (Just "b", 2) -> step "True"
                    _ -> step "False"
-          scans = scanSpline r "" $ replicate 3 ()
+          Identity scans = scanSpline r "" $ replicate 3 ()
       it "should end with the last value captured" $
-          unwords (concat scans) `shouldBe` "a b True"
+          unwords scans `shouldBe` "a b True"
 
   describe "mapOutput" $ do
       let s :: Spline a Char ()
@@ -155,7 +156,7 @@ main = hspec $ do
   let inc = 1 ~> accumulate (+) 0
       sinc :: Spline a Int (Int, Int)
       sinc = inc `untilEvent` (1 ~> after 3)
-      go a = scanSpline a 0 [0..9]
+      go a = runIdentity (scanSpline a 0 [0..9])
       equal a b = go a `shouldBe` go b
 
   describe "spline's functor instance" $ do
@@ -176,13 +177,13 @@ main = hspec $ do
         pfx = pure (1+1)
     it "(homomorphism) pure f <*> pure x = pure (f x)" $ equal pfpx pfx
     let u :: Spline a Int (Int -> Int)
-        u = pure 66 `_untilEvent` (use (+1) $ 1 ~> after 3)
+        u = pure 66 `_untilEvent` (use (+1) $ 1 ~> after (3 :: Int))
         upy = u <*> pure 1
         pyu = pure ($ 1) <*> u
     it "(interchange) u <*> pure y = pure ($ y) <*> u" $ equal upy pyu
     let v :: Spline a Int (Int -> Int)
-        v = pure 66 `_untilEvent` (use (1-) $ 1 ~> after 4)
-        w = pure 72 `_untilEvent` (use 3 $ 1 ~> after 1)
+        v = pure 66 `_untilEvent` (use (1-) $ 1 ~> after (4 :: Float))
+        w = pure 72 `_untilEvent` (use 3 $ 1 ~> after (1 :: Float))
         pduvw = pure (.) <*> u <*> v <*> w
         uvw = u <*> (v <*> w)
     it "(compisition) pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $
@@ -197,14 +198,14 @@ main = hspec $ do
     it "(right identity w/ const) m >>= return == m" $ equal (p >>= return) p
     it "(right identity) m >>= return == m" $ equal h hr
     it "(right identity w/ monadic results) m >>= return == m" $
-      scanSpline h 0 [0..9 :: Int]
-        `shouldBe` scanSpline hr 0 [0..9 :: Int]
+      runIdentity (scanSpline h 0 [0..9 :: Int])
+        `shouldBe` runIdentity (scanSpline hr 0 [0..9 :: Int])
     let f :: Int -> Spline a String Bool
         f x = do mapM_ (step . show) [0..x]
                  return True
     it "(left identity) return a >>= f == f a" $
-      scanSpline (return 3 >>= f) "" [0..9 :: Int]
-        `shouldBe` scanSpline (f 3) "" [0..9 :: Int]
+      runIdentity (scanSpline (return 3 >>= f) "" [0..9 :: Int])
+        `shouldBe` runIdentity (scanSpline (f 3) "" [0..9 :: Int])
     let m :: Spline a String Int
         m = do step "hey"
                step "dude"
@@ -215,5 +216,5 @@ main = hspec $ do
         g False = do step "dang"
                      step "missed it"
     it "(associativity) (m >>= f) >>= g == m >>= (\\x -> f x >>= g)" $
-      scanSpline ((m >>= f) >>= g) "" [0..9 :: Int]
-        `shouldBe` scanSpline (m >>= (\x -> f x >>= g)) "" [0..9 :: Int]
+      runIdentity (scanSpline ((m >>= f) >>= g) "" [0..9 :: Int])
+        `shouldBe` runIdentity (scanSpline (m >>= (\x -> f x >>= g)) "" [0..9 :: Int])

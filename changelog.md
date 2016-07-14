@@ -18,4 +18,5 @@ change log
 
 0.5.0.1 - removed time as dependency
 
-0.5.0.2 - separated tweening time and value, added runSplineE
+0.5.0.2 - separated tweening time and value, added runSplineE, builds on all GHC
+          since 7.6

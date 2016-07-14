@@ -21,6 +21,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 module Control.Varying.Spline (
     -- * Spline
     Spline,
@@ -69,7 +70,7 @@ data SplineT a b m c = Pass c
 
 -- | Convert a spline into a stream of output value and eventual result value
 -- tuples. Requires a default output value in case none are produced.
-runSplineT :: Monad m => SplineT a b m c -> b -> VarT m a (b, Event c)
+runSplineT :: (Applicative m, Monad m) => SplineT a b m c -> b -> VarT m a (b, Event c)
 --runSplineT (SplineT v) _ = VarT $ runVarT v >=> \case
 --  ((b,NoEvent), v1) -> return ((b,NoEvent), runSplineT (SplineT v1) b)
 --  ((b,Event c), _)  -> return ((b, Event c), runSplineT (Pass c) b)
@@ -92,7 +93,7 @@ runSplineE (SplineT v) a = do
     Event c -> (Right c, Pass c)
 
 -- | A spline is a functor by applying the function to the result.
-instance Monad m => Functor (SplineT a b m) where
+instance (Applicative m, Monad m) => Functor (SplineT a b m) where
   fmap f (Pass c) = Pass $ f c
   fmap f (SplineT v) = SplineT (((f <$>) <$>) <$> v)
 
@@ -100,7 +101,7 @@ instance Monad m => Functor (SplineT a b m) where
 -- output value and immediately returns the argument. It responds to '<*>' by
 -- applying the left arguments result value (the function) to the right
 -- arguments result value (the argument), sequencing them both in serial.
-instance Monad m => Applicative (SplineT a b m) where
+instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
   pure = Pass
   (Pass f) <*> (Pass x) = Pass $ f x
   (Pass f) <*> (SplineT v) = f <$> SplineT v
@@ -112,7 +113,7 @@ instance Monad m => Applicative (SplineT a b m) where
 
 -- | A spline responds to bind by running until it produces an eventual value,
 -- then uses that value to run the next spline.
-instance Monad m => Monad (SplineT a b m) where
+instance (Applicative m, Monad m) => Monad (SplineT a b m) where
   return = Pass
   (Pass x) >>= f = f x
   (SplineT v) >>= f = SplineT $ VarT $ \a -> do
@@ -121,14 +122,16 @@ instance Monad m => Monad (SplineT a b m) where
       NoEvent -> return ((b, NoEvent), runSplineT (SplineT v1 >>= f) b)
       Event c -> runVarT (runSplineT (f c) b) a
 
+#if MIN_VERSION_base(4,8,0)
 -- | A spline is a transformer if its output type is a Monoid.
 instance Monoid b => MonadTrans (SplineT a b) where
   lift = effect mempty
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value.
-instance (Monoid b, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
+instance (Monoid b, Applicative m, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
   liftIO = lift . liftIO
+#endif
 
 -- | Run the spline over the input values, gathering the output and result
 -- values in a list.
@@ -150,7 +153,7 @@ resultStream :: (Applicative m, Monad m)
 resultStream s b = snd <$> runSplineT s b
 
 -- | Create a spline from an event stream.
-fromEvent :: Monad m => VarT m a (Event b) -> SplineT a (Event b) m b
+fromEvent :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a (Event b) m b
 fromEvent ve = SplineT $ f <$> ve
   where f e = (e,e)
 
@@ -273,7 +276,7 @@ mapOutput vf (SplineT vx) = SplineT $ vg <*> vx
 mapOutput _ (Pass c) = Pass c
 
 -- | Map the input value of a spline.
-adjustInput :: (Monad m)
+adjustInput :: (Applicative m, Monad m)
             => VarT m a (a -> r) -> SplineT r b m c -> SplineT a b m c
 adjustInput vf (SplineT vx) = SplineT $ VarT $ \a -> do
     (f, vf1) <- runVarT vf a

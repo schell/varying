@@ -35,11 +35,11 @@ tweeny = do
     tweeny
 
 -- Our time signal counts input delta time samples.
-time :: Monad m => VarT m Delta Float
+time :: (Applicative m, Monad m) => VarT m Delta Float
 time = var unDelta
 
 -- | Our Point value that varies over time continuously in x and y.
-backAndForth :: Monad m => VarT m Delta Point
+backAndForth :: (Applicative m, Monad m) => VarT m Delta Point
 backAndForth =
     -- Turn our splines into continuous output streams. We must provide
     -- a starting value since splines are not guaranteed to be defined at

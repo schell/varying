@@ -174,7 +174,7 @@ eitherE vb vc = f <$> vb <*> vc
 -- | Combine two event streams and produce an event any time either stream
 -- produces. In the case that both streams produce, this produces the event of
 -- the left stream.
-anyE :: Monad m => [VarT m a (Event b)] -> VarT m a (Event b)
+anyE :: (Applicative m, Monad m) => [VarT m a (Event b)] -> VarT m a (Event b)
 anyE [] = never
 anyE vs = VarT $ \a -> do
   outs <- mapM (`runVarT` a) vs
