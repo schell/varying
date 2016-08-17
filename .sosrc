@@ -12,6 +12,7 @@
 - patterns:
   - .*\.l?hs$
   - .*\.cabal
+  - .*stack\.yaml$
   commands:
   - stack --resolver lts-1   --install-ghc bench --fast # for ghc 7.6
   - stack --resolver lts-2   --install-ghc bench --fast # for ghc 7.8
