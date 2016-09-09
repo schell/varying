@@ -6,8 +6,8 @@
 --
 --  'Event' streams describe things that happen at a specific domain.
 --  For example, you can think of the event stream
---  @VarT IO Double (Event ())@ as an occurrence of () at a specific input
---  of type 'Double'.
+--  @'VarT' 'IO' 'Double' ('Event' ())@ as an occurrence of @()@ at a specific
+--  input of type 'Double'.
 --
 --  For sequencing streams please check out 'Control.Varying.Spline' which
 --  lets you chain together sequences of event streams using do-notation.
@@ -80,26 +80,44 @@ orE y ye = VarT $ \a -> do
 --------------------------------------------------------------------------------
 -- Generating events from values
 --------------------------------------------------------------------------------
--- | Populates a varying Event with a value. This is meant to be used with
--- the various 'on...' event triggers. For example
+-- |
 -- @
--- use 1 onTrue
+-- 'use' :: 'Monad' m => b -> 'VarT' m a ('Event' x) -> 'VarT' m a ('Event' b)
 -- @
--- produces values of `Event 1` when the input value is `True`.
+--
+-- Populates a varying Event with a value. This is meant to be used with
+-- the various @on...@ event triggers. For example,
+-- @
+-- 'use' 1 'onTrue'
+-- @
+-- produces values of @'Event' 1@ when the input value is 'True'.
 use :: (Functor f, Functor e) => a -> f (e b) -> f (e a)
 use a v = (a <$) <$> v
 
--- | Triggers an `Event ()` when the input value is True.
+-- | Triggers an @'Event' ()@ when the input value is 'True'.
+--
+-- @
+-- 'use' b 'onTrue' :: 'Monad' m => 'VarT' m 'Bool' ('Event' b)
+-- @
 onTrue :: (Applicative m, Monad m) => VarT m Bool (Event ())
 onTrue = var $ \b -> if b then Event () else NoEvent
 
--- | Triggers an `Event a` when the input is `Just a`.
+-- | Triggers an @'Event' a@ when the input is @'Just' a@.
+--
+-- @
+-- 'use' b 'onJust' :: 'Monad' m => 'VarT' m ('Maybe' x) ('Event' b)
+-- @
 onJust :: (Applicative m, Monad m) => VarT m (Maybe a) (Event a)
 onJust = var $ \ma -> case ma of
                                Nothing -> NoEvent
                                Just a  -> Event a
 
--- | Triggers an `Event a` when the input is a unique value.
+-- | Triggers an @'Event' a@ when the input is distinct from the previous
+-- input.
+--
+-- @
+-- 'use' b 'onUnique' :: ('Eq' x, 'Monad' m) => 'VarT' m x ('Event' b)
+-- @
 onUnique :: (Applicative m, Monad m, Eq a) => VarT m a (Event a)
 onUnique = VarT $ \a -> return (Event a, trigger a)
     where trigger a' = VarT $ \a'' -> let e = if a' == a''
@@ -107,7 +125,7 @@ onUnique = VarT $ \a -> return (Event a, trigger a)
                                              else Event a''
                                    in return (e, trigger a'')
 
--- | Triggers an `Event a` when the condition is met.
+-- | Triggers an @'Event' a@ when the condition is met.
 onWhen :: Applicative m => (a -> Bool) -> VarT m a (Event a)
 onWhen f = var $ \a -> if f a then Event a else NoEvent
 --------------------------------------------------------------------------------
@@ -124,14 +142,16 @@ foldStream f acc = VarT $ \e ->
 -- | Produces the given value until the input events produce a value, then
 -- produce that value until a new input event produces. This always holds
 -- the last produced value, starting with the given value.
+--
 -- @
--- time >>> after 3 >>> startingWith 0
+-- time '>>>' 'Control.Varying.Time.after' 3 '>>>' 'startingWith' 0
 -- @
 startingWith, startWith :: (Applicative m, Monad m) => a -> VarT m (Event a) a
 startingWith = startWith
 startWith = foldStream (\_ a -> a)
 
--- | Stream through some number of successful events and then inhibit forever.
+-- | Stream through some number of successful 'Event's and then inhibit
+-- forever.
 takeE :: (Applicative m, Monad m)
       => Int -> VarT m a (Event b) -> VarT m a (Event b)
 takeE 0 _ = never
@@ -141,7 +161,7 @@ takeE n ve = VarT $ \a -> do
         NoEvent -> return (NoEvent, takeE n ve')
         Event b -> return (Event b, takeE (n-1) ve')
 
--- | Inhibit the first n occurences of an event.
+-- | Inhibit the first n occurences of an 'Event'.
 dropE :: (Applicative m, Monad m)
       => Int -> VarT m a (Event b) -> VarT m a (Event b)
 dropE 0 ve = ve
@@ -151,7 +171,7 @@ dropE n ve = VarT $ \a -> do
         NoEvent -> return (NoEvent, dropE n ve')
         Event _ -> return (NoEvent, dropE (n-1) ve')
 
--- | Inhibit all events that don't pass the predicate.
+-- | Inhibit all 'Event's that don't pass the predicate.
 filterE :: (Applicative m, Monad m)
         => (b -> Bool) -> VarT m a (Event b) -> VarT m a (Event b)
 filterE p v = v >>> var check
@@ -160,8 +180,8 @@ filterE p v = v >>> var check
 --------------------------------------------------------------------------------
 -- Using multiple streams
 --------------------------------------------------------------------------------
--- | If the left event stream produces a value, wrap the value in 'Left' and
--- produce that value, else if the right event stream produces a value,
+-- | If the left 'Event' stream produces a value, wrap the value in 'Left' and
+-- produce that value, else if the right 'Event' stream produces a value,
 -- wrap the value in 'Right' and produce that value, else inhibit.
 eitherE :: (Applicative m, Monad m)
         => VarT m a (Event b) -> VarT m a (Event c)
@@ -171,9 +191,9 @@ eitherE vb vc = f <$> vb <*> vc
           f _ (Event c) = Event $ Right c
           f _ _ = NoEvent
 
--- | Combine two event streams and produce an event any time either stream
--- produces. In the case that both streams produce, this produces the event of
--- the left stream.
+-- | Combine two 'Event' streams and produce an 'Event' any time either stream
+-- produces. In the case that both streams produce, this produces the 'Event'
+-- of the left stream.
 anyE :: (Applicative m, Monad m) => [VarT m a (Event b)] -> VarT m a (Event b)
 anyE [] = never
 anyE vs = VarT $ \a -> do
@@ -187,11 +207,19 @@ anyE vs = VarT $ \a -> do
 once :: (Applicative m, Monad m) => b -> VarT m a (Event b)
 once b = VarT $ \_ -> return (Event b, never)
 
--- | Never produces any event values.
+-- | Never produces any 'Event' values.
+--
+-- @
+-- 'never' = 'pure' 'NoEvent'
+-- @
 never :: (Applicative m, Monad m) => VarT m b (Event c)
 never = pure NoEvent
 
--- | Produces events with the initial value forever.
+-- | Produces 'Event's with the initial value forever.
+--
+-- @
+-- 'always' e = 'pure' ('Event' e)
+-- @
 always :: (Applicative m, Monad m) => b -> VarT m a (Event b)
 always = pure . Event
 
@@ -225,22 +253,22 @@ v `andThenWith` f = run v NoEvent
 --------------------------------------------------------------------------------
 -- Bubbling
 --------------------------------------------------------------------------------
--- | Produce events of a value stream 'v' only when its input value passes a
--- predicate 'f'.
--- 'v' maintains state while cold.
+-- | Produce 'Event's of a value stream @v@ only when its input value passes a
+-- predicate @f@.
+-- @v@ maintains state while cold.
 onlyWhen :: (Applicative m, Monad m)
-         => VarT m a b -- ^ 'v' - The value stream
-         -> (a -> Bool) -- ^ 'f' - The predicate to run on 'v''s input values.
+         => VarT m a b -- ^ @v@ - The value stream
+         -> (a -> Bool) -- ^ @f@ - The predicate to run on @v@'s input values.
          -> VarT m a (Event b)
 onlyWhen v f = v `onlyWhenE` hot
     where hot = var id >>> onWhen f
 
--- | Produce events of a value stream 'v' only when an event stream 'h'
+-- | Produce events of a value stream @v@ only when an event stream @h@
 -- produces an event.
--- 'v' and 'h' maintain state while cold.
+-- @v@ and @h@ maintain state while cold.
 onlyWhenE :: (Applicative m, Monad m)
-          => VarT m a b -- ^ 'v' - The value stream
-          -> VarT m a (Event c) -- ^ 'h' - The event stream
+          => VarT m a b -- ^ @v@ - The value stream
+          -> VarT m a (Event c) -- ^ @h@ - The event stream
           -> VarT m a (Event b)
 onlyWhenE v hot = VarT $ \a -> do
     (e, hot') <- runVarT hot a
@@ -294,9 +322,9 @@ instance Applicative Event where
     (<*>) (Event f) (Event a) = Event $ f a
     (<*>) _ _ = NoEvent
 
--- | Any event is a monoid that responds to mempty with NoEvent. It
--- responds to mappend by always choosing the rightmost event. This means
--- left events are replaced unless the right event is NoEvent.
+-- | Any event is a 'Monoid' that responds to 'mempty' with 'NoEvent'. It
+-- responds to 'mappend' by always choosing the rightmost event. This means
+-- left events are replaced unless the right event is 'NoEvent'.
 instance Monoid (Event a) where
     mempty = NoEvent
     mappend a NoEvent = a
@@ -306,11 +334,11 @@ instance Functor Event where
     fmap f (Event a) = Event $ f a
     fmap _ NoEvent = NoEvent
 
--- | A value of @Event ()@ means that an event has occurred and that the
--- result is a @()@. A value of @NoEvent@ means that an event did not
+-- | A value of @'Event' ()@ means that an event has occurred and that the
+-- result is a @()@. A value of 'NoEvent' means that an event did not
 -- occur.
 --
--- Event streams (like @VarT m a (Event b)@) describe events that may occur over
--- varying @a@ (also known as the series of @a@). Usually @a@ would be some
--- form of time or some user input type.
+-- Event streams (like @'VarT' m a ('Event' b)@) describe events that may occur
+-- over varying @a@ (also known as the series of @a@). Usually @a@ would be
+-- some form of time or some user input type.
 data Event a = Event a | NoEvent deriving (Eq)
