@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns #-}
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
@@ -32,7 +33,6 @@ module Control.Varying.Core (
     accumulate,
     -- * Sampling value streams (running and other entry points)
     -- $running
-    runVarT,
     scanVar,
     stepMany,
     -- * Tracing value streams in flight
@@ -49,6 +49,22 @@ import Control.Applicative
 import Data.Monoid
 import Data.Functor.Identity
 import Debug.Trace
+--------------------------------------------------------------------------------
+-- Core datatypes
+--------------------------------------------------------------------------------
+-- | A value stream parameterized with Identity that takes input of type @a@
+-- and gives output of type @b@. This is the pure, effect-free version of
+-- 'VarT'.
+type Var a b = VarT Identity a b
+
+-- | A value stream is a structure that contains a value that changes over some
+-- input. It's a kind of Mealy machine (an automaton) with effects. Using
+-- 'runVarT' with an input value of type 'a' yields a "step", which is a value
+-- of type 'b' and a new 'VarT' for yielding the next value.
+newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
+                  -- ^ Given an input value, return a computation that effectfully
+                  -- produces an output value and a new stream for producing the next
+                  -- sample.
 --------------------------------------------------------------------------------
 -- $creation
 -- You can create a pure value stream by lifting a function @(a -> b)@
@@ -83,15 +99,15 @@ import Debug.Trace
 --------------------------------------------------------------------------------
 -- | Lift a pure computation into a stream.
 var :: Applicative m => (a -> b) -> VarT m a b
-var f = VarT $ \a -> pure (f a, var f)
+var f = VarT $ \(!a) -> pure (f a, var f)
 
 -- | Lift a constant value into a stream.
-done :: Applicative m => b -> VarT m a b
-done = Done
+done :: (Applicative m, Monad m) => b -> VarT m a b
+done b = VarT $ \(!_) -> return (b, done b)
 
 -- | Lift a monadic computation into a stream.
 varM :: Monad m => (a -> m b) -> VarT m a b
-varM f = VarT $ \a -> do
+varM f = VarT $ \(!a) -> do
     b <- f a
     return (b, varM f)
 
@@ -100,7 +116,7 @@ mkState :: Monad m
         => (a -> s -> (b, s)) -- ^ state transformer
         -> s -- ^ intial state
         -> VarT m a b
-mkState f s = VarT $ \a -> do
+mkState f s = VarT $ \(!a) -> do
   let (b', s') = f a s
   return (b', mkState f s')
 --------------------------------------------------------------------------------
@@ -111,10 +127,6 @@ mkState f s = VarT $ \a -> do
 -- > do (sample, v') <- runVarT v inputValue
 
 --------------------------------------------------------------------------------
-runVarT :: Monad m => VarT m a b -> a -> m (b, VarT m a b)
-runVarT (Done b) _ = return (b, Done b)
-runVarT (VarT v) a = v a
-
 -- | Iterate a stream over a list of input until all input is consumed,
 -- then iterate the stream using one single input. Returns the resulting
 -- output value and the new stream.
@@ -151,7 +163,7 @@ vftrace f = var $ \b -> trace (f b) b
 -- | Accumulates input values using a folding function and yields
 -- that accumulated value each sample.
 accumulate :: (Monad m, Applicative m) => (c -> b -> c) -> c -> VarT m b c
-accumulate f b = VarT $ \a -> do
+accumulate f b = VarT $ \(!a) -> do
     let b' = f b a
     return (b', accumulate f b')
 
@@ -161,9 +173,9 @@ accumulate f b = VarT $ \a -> do
 --
 -- > let v = 1 + delay 0 v in testVar_ v
 delay :: (Monad m, Applicative m) => b -> VarT m a b -> VarT m a b
-delay b v = VarT $ \a -> return (b, go a v)
-    where go a v' = VarT $ \a' -> do (b', v'') <- runVarT v' a
-                                     return (b', go a' v'')
+delay b v = VarT $ \(!a) -> return (b, go a v)
+    where go a v' = VarT $ \(!a') -> do (b', v'') <- runVarT v' a
+                                        return (b', go a' v'')
 --------------------------------------------------------------------------------
 -- $composition
 -- You can compose value streams together using Arrow's '>>>' and '<<<' or the
@@ -186,9 +198,7 @@ delay b v = VarT $ \a -> return (b, go a v)
 -- >  fmap (*3) $ accumulate (+) 0
 -- Will sum input values and then multiply the sum by 3.
 instance (Applicative m, Monad m) => Functor (VarT m b) where
-  fmap f (Done x) = Done $ f x
   fmap f v = v >>> var f
-
 -- | A very simple category instance.
 --
 -- @
@@ -203,18 +213,20 @@ instance (Applicative m, Monad m) => Functor (VarT m b) where
 -- and 'plug right' ('>>>') instead of ('.') where possible.
 instance (Applicative m, Monad m) => Category (VarT m) where
     id = var id
-    f0 . g0 = VarT $ \a -> do (b, g) <- runVarT g0 a
-                              (c, f) <- runVarT f0 b
-                              return (c, f . g)
+    f0 . g0 = VarT $ \(!a) -> do
+      (b, g) <- runVarT g0 a
+      (c, f) <- runVarT f0 b
+      return (c, f . g)
 
 -- | Streams are applicative.
 --
 -- >  (,) <$> pure True <*> var "Applicative"
 instance (Applicative m, Monad m) => Applicative (VarT m a) where
     pure = done
-    vf <*> va = VarT $ \a -> do (f, vf') <- runVarT vf a
-                                (b, va') <- runVarT va a
-                                return (f b, vf' <*> va')
+    vf <*> vx = VarT $ \(!a) -> do
+      (f, vf') <- runVarT vf a
+      (x, vx') <- runVarT vx a
+      return (f x, vf' <*> vx')
 
 -- | Streams are arrows, which means you can use proc notation.
 --
@@ -270,22 +282,3 @@ instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
 instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
     (/) = liftA2 (/)
     fromRational = pure . fromRational
---------------------------------------------------------------------------------
--- Core datatypes
---------------------------------------------------------------------------------
--- | A value stream parameterized with Identity that takes input of type @a@
--- and gives output of type @b@. This is the pure, effect-free version of
--- 'VarT'.
-type Var a b = VarT Identity a b
-
--- | A value stream is a structure that contains a value that changes over some
--- input. It's a kind of Mealy machine (an automaton) with effects. Using
--- 'runVarT' with an input value of type 'a' yields a "step", which is a value
--- of type 'b' and a new 'VarT' for yielding the next value.
-data VarT m a b = Done b
-                  -- ^ Given a value, return a computation that yields a constant value
-                  -- forever. You can also do this with the function 'done'.
-                | VarT (a -> m (b, VarT m a b))
-                  -- ^ Given an input value, return a computation that effectfully
-                  -- produces an output value and a new stream for producing the next
-                  -- sample.
