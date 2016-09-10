@@ -227,6 +227,7 @@ instance (Applicative m, Monad m) => Applicative (VarT m a) where
       (f, vf') <- runVarT vf a
       (x, vx') <- runVarT vx a
       return (f x, vf' <*> vx')
+-- Note [1]
 
 -- | Streams are arrows, which means you can use proc notation.
 --
@@ -282,3 +283,353 @@ instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
 instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
     (/) = liftA2 (/)
     fromRational = pure . fromRational
+
+
+-- [1] Proof of the applicative laws:
+--
+-- identity
+-- ========
+-- pure id <*> va = va
+--
+-- -- Definition of pure
+-- VarT (\_ -> pure (id, pure id)) <*> v
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (f, vf') <- runVarT (VarT (\_ -> pure (id, pure id))) x
+--   (a, va') <- runVarT va x
+--   pure (f a, vf' <*> va'))
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (f, vf') <- (\_ -> pure (id, pure id)) x
+--   (a, va') <- runVarT va x
+--   pure (f a, vf' <*> va'))
+--
+-- -- Application
+-- VarT (\x -> do
+--   (f, vf') <- pure (id, pure id)
+--   (a, va') <- runVarT va x
+--   pure (f a, vf' <*> va'))
+--
+-- -- pure x >>= f = f x
+-- VarT (\x -> do
+--   (a, va') <- runVarT va x
+--   pure (id a, pure id <*> va'))
+--
+-- -- Definition of id
+-- VarT (\x -> do
+--   (a, va') <- runVarT va x
+--   pure (a, pure id <*> va'))
+--
+-- -- Coinduction
+-- VarT (\x -> do
+--   (a, va') <- runVarT va x
+--   pure (a, va'))
+--
+-- -- f >>= pure = f
+-- VarT (\x -> runVarT va x)
+--
+-- -- Eta reduction
+-- VarT (runVarT va)
+--
+-- -- Newtype
+-- va
+--
+--
+-- composition
+-- ===========
+-- pure (.) <*> u <*> v <*> w = u <*> (v <*> w)
+--
+-- -- Definition of pure
+-- VarT (\_ -> pure ((.), pure (.))) <*> u <*> v <*> w
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (h, t)  <- runVarT (VarT (\_ -> pure ((.), pure (.)))) x
+--   (f, u') <- runVarT u x
+--   pure (h f, t <*> u')) <*> v <*> w
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (h, t)  <- (\_ -> pure ((.), pure (.))) x
+--   (f, u') <- runVarT u x
+--   pure (h f, t <*> u')) <*> v <*> w
+--
+-- -- Application
+-- VarT (\x -> do
+--   (h, t)  <- pure ((.), pure (.)))
+--   (f, u') <- runVarT u x
+--   pure (h f, t <*> u')) <*> v <*> w
+--
+-- -- pure x >>= f = f x
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   pure ((.) f, pure (.) <*> u')) <*> v <*> w
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (h, t) <-
+--     runVarT
+--       (VarT (\y -> do
+--         (f, u') <- runVarT u y
+--         pure ((.) f, pure (.) <*> u'))) x
+--   (g, v') <- runVarT v x
+--   pure (h g, t <*> v')) <*> w
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (h, t) <-
+--     (\y -> do
+--       (f, u') <- runVarT u y
+--       pure ((.) f, pure (.) <*> u')) x
+--   (g, v') <- runVarT v x
+--   pure (h g, t <*> v')) <*> w
+--
+-- -- Application
+-- VarT (\x -> do
+--   (h, t) <- do
+--     (f, u') <- runVarT u x
+--     pure ((.) f, pure (.) <*> u')
+--   (g, v') <- runVarT v x
+--   pure (h g, t <*> v')) <*> w
+--
+-- -- (f >=> g) >=> h = f >=> (g >=> h)
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (h, t)  <- pure ((.) f, pure (.) <*> u')
+--   (g, v') <- runVarT v x
+--   pure (h g, t <*> v')) <*> w
+--
+-- -- pure x >>= f = f x
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (g, v') <- runVarT v x
+--   pure ((.) f g, pure (.) <*> u' <*> v')) <*> w
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (h, t) <-
+--     runVarT
+--       (VarT (\y -> do
+--         (f, u') <- runVarT u y
+--         (g, v') <- runVarT v y
+--         pure ((.) f g, pure (.) <*> u' <*> v'))) x
+--   (a, w') <- runVarT w x
+--   pure (h a, t <*> w'))
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (h, t) <-
+--     (\y -> do
+--       (f, u') <- runVarT u y
+--       (g, v') <- runVarT v y
+--       pure ((.) f g, pure (.) <*> u' <*> v')) x
+--   (a, w') <- runVarT w x
+--   pure (h a, t <*> w'))
+--
+-- -- Application
+-- VarT (\x -> do
+--   (h, t) <- do
+--     (f, u') <- runVarT u x
+--     (g, v') <- runVarT v x
+--     pure ((.) f g, pure (.) <*> u' <*> v'))
+--   (a, w') <- runVarT w x
+--   pure (h a, t <*> w'))
+--
+-- -- (f >=> g) >=> h = f >=> (g >=> h)
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (g, v') <- runVarT v x
+--   (h, t)  <- pure ((.) f g, pure (.) <*> u' <*> v'))
+--   (a, w') <- runVarT w x
+--   pure (h a, t <*> w'))
+--
+-- -- pure x >>= f = f x
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (g, v') <- runVarT v x
+--   (a, w') <- runVarT w x
+--   pure ((.) f g a, pure (.) <*> u' <*> v' <*> w'))
+--
+-- -- Definition of .
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (g, v') <- runVarT v x
+--   (a, w') <- runVarT w x
+--   pure (f (g a), pure (.) <*> u' <*> v' <*> w'))
+--
+-- -- Coinduction
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (g, v') <- runVarT v x
+--   (a, w') <- runVarT w x
+--   pure (f (g a), u' <*> (v' <*> w')))
+--
+-- -- pure x >>= f = f
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (g, v') <- runVarT v x
+--   (a, w') <- runVarT w x
+--   (b, vw) <- pure (g a, v' <*> w')
+--   pure (f b, u' <*> vw))
+--
+-- -- (f >=> g) >=> h = f >=> (g >=> h)
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (b, vw) <- do
+--     (g, v') <- runVarT v x
+--     (a, w') <- runVarT w x
+--     pure (g a, v' <*> w')
+--   pure (f b, u' <*> vw))
+--
+-- -- Abstraction
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (b, vw) <-
+--     (\y -> do
+--       (g, v') <- runVarT v y
+--       (a, w') <- runVarT w y)
+--       pure (g a, v' <*> w')) x
+--   pure (f b, u' <*> vw))
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (b, vw) <-
+--     runVarT
+--       (VarT (\y -> do
+--         (g, v') <- runVarT v y
+--         (a, w') <- runVarT w y)
+--         pure (g a, v' <*> w')) x
+--   pure (f b, u' <*> vw))
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (b, vw) <- runVarT (v <*> w) x
+--   pure (f b, u' <*> vw))
+--
+-- -- Definition of <*>
+-- u <*> (v <*> w)
+--
+--
+-- homomorphism
+-- ============
+-- pure f <*> pure a = pure (f a)
+--
+-- -- Definition of pure
+-- VarT (\_ -> pure (f, pure f)) <*> pure a
+--
+-- -- Definition of pure
+-- VarT (\_ -> pure (f, pure f)) <*> VarT (\_ -> pure (a, pure a))
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (f', vf') <- runVarT (VarT (\_ -> pure (f, pure f))) x
+--   (a', va') <- runVarT (VarT (\_ -> pure (a, pure a))) x
+--   pure (f' a', vf' <*> va'))
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (f', vf') <- (\_ -> pure (f, pure f)) x
+--   (a', va') <- runVarT (VarT (\_ -> pure (a, pure a))) x
+--   pure (f' a', vf' <*> va'))
+--
+-- -- Application
+-- VarT (\x -> do
+--   (f', vf') <- pure (f, pure f)
+--   (a', va') <- runVarT (VarT (\_ -> pure (a, pure a))) x
+--   pure (f' a', vf' <*> va'))
+--
+-- -- pure x >>= f = f x
+-- VarT (\x -> do
+--   (a', va') <- runVarT (VarT (\_ -> pure (a, pure a))) x
+--   pure (f a', pure f <*> va'))
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (a', va') <- (\_ -> pure (a, pure a)) x
+--   pure (f a', pure f <*> va'))
+--
+-- -- Application
+-- VarT (\x -> do
+--   (a', va') <- pure (a, pure a)
+--   pure (f a', pure f <*> va'))
+--
+-- -- pure x >>= f = f x
+-- VarT (\x -> pure (f a, pure f <*> pure a))
+--
+-- -- Coinduction
+-- VarT (\x -> pure (f a, pure (f a)))
+--
+-- -- Definition of pure
+-- pure (f a)
+--
+--
+-- interchange
+-- ===========
+-- u <*> pure y = pure ($ y) <*> u
+--
+-- -- Definition of <*>
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (a, y') <- runVarT (pure y) x
+--   pure (f a, u' <*> y'))
+--
+-- -- Definition of pure
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (a, y') <- runVarT (VarT (\_ -> pure (y, pure y))) x
+--   pure (f a, u' <*> y'))
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (a, y') <- (\_ -> pure (y, pure y)) x
+--   pure (f a, u' <*> y'))
+--
+-- -- Application
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   (a, y') <- pure (y, pure y))
+--   pure (f a, u' <*> y'))
+--
+-- -- pure x >>= f = f
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   pure (f y, u' <*> pure y))
+--
+-- -- Coinduction
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   pure (f y, pure ($ y) <*> u'))
+--
+-- -- Definition of $
+-- VarT (\x -> do
+--   (f, u') <- runVarT u x
+--   pure (($ y) f, pure ($ y) <*> u')
+--
+-- -- pure x >>= f = f
+-- VarT (\x -> do
+--   (g, y') <- pure (($ y), pure ($ y))
+--   (f, u') <- runVarT u x
+--   pure (g f, y' <*> u')
+--
+-- -- Abstraction
+-- VarT (\x -> do
+--   (g, y') <- (\_ -> pure (($ y), pure ($ y))) x
+--   (f, u') <- runVarT u x
+--   pure (g f, y' <*> u')
+--
+-- -- Newtype
+-- VarT (\x -> do
+--   (g, y') <- runVarT (VarT (\_ -> pure (($ y), pure ($ y)))) x
+--   (f, u') <- runVarT u x
+--   pure (g f, y' <*> u')
+--
+-- -- Definition of <*>
+-- VarT (\_ -> pure (($ y), pure ($ y))) <*> u
+--
+-- -- Definition of pure
+-- pure ($ y) <*> u
