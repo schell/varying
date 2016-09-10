@@ -20,3 +20,6 @@ change log
 
 0.5.0.2 - separated tweening time and value, added runSplineE, builds on all GHC
           since 7.6
+
+0.6.0.0 - changed the internal type of SplineT to use Either, reducing unused
+          output values and preventing time/space leaks
