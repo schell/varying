@@ -15,7 +15,8 @@
 --   dreams).
 
 --
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE Rank2Types   #-}
+{-# LANGUAGE BangPatterns #-}
 module Control.Varying.Tween (
     -- * Creating tweens
     -- $creation
@@ -148,15 +149,22 @@ linear c t b = c * (realToFrac t) + b
 -- more than once ;)
 tween :: (Applicative m, Monad m, Num t, Fractional f, Ord f)
       => Easing t f -> t -> t -> f -> SplineT f t m t
-tween f start end dur =
-  let c = end - start
-      b = start
-      vt = h <$> timeAsPercentageOf dur
-      h t = if t >= 1.0
-            then (end, Event end)
-            else (f c t b, NoEvent)
-  in SplineT vt
-
+--tween f start end dur =
+--  let c = end - start
+--      b = start
+--      vt = h <$> timeAsPercentageOf dur
+--      h t = if t >= 1.0
+--            then (end, Event end)
+--            else (f c t b, NoEvent)
+--  in SplineT vt
+tween f start end dur = SplineT (timeAsPercentageOf dur ~> VarT ft)
+  where c = end - start
+        b = start
+        ft (!t) = do
+          let x = f c t b
+          return $ if t >= 1.0
+            then (Left x, done $ Right x)
+            else (Left x, VarT ft)
 -- | A version of 'tween' that discards the result. It is simply
 --
 -- @

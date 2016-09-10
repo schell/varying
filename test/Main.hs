@@ -1,7 +1,6 @@
 module Main where
 
 import Test.Hspec hiding (after, before)
-import Test.QuickCheck
 import Control.Applicative
 import Control.Varying
 import Data.Functor.Identity
@@ -26,8 +25,8 @@ main = hspec $ do
   describe "anyE" $ do
     it "should produce on any event" $ do
       let v1,v2,v3 :: Var () (Event Int)
-          v1 = use 1 (1 ~> before 2)
-          v2 = use 2 (1 ~> after 3)
+          v1 = use 1 ((1 :: Var () Int) ~> before 2)
+          v2 = use 2 ((1 :: Var () Int) ~> after 3)
           v3 = always 3
           v = anyE [v1,v2,v3]
           scans = fst $ runIdentity $ scanVar v $ replicate 4 ()
@@ -44,15 +43,18 @@ main = hspec $ do
 
   describe "tween" $
       it "should step by the dt passed in" $ do
-          let Identity scans = scanSpline (tween linear 0 4 (4 :: Float)) 0
+          let Identity scans = scanSpline (tween linear 0 4 (4 :: Float))
+                                          0
                                           [0,1,1,1,1,1]
-          scans `shouldBe` [0,1,2,3,4,4]
+          scans `shouldBe` [0,1,2,3,4,(4 :: Double)]
 
   describe "untilEvent" $ do
-      let Identity scans = scanSpline (3 `untilEvent` (1 ~> after 10)) 0
+      let Identity scans = scanSpline (3 `untilEvent` ((1 :: Var () Int)
+                                                          ~> after 10))
+                                      0
                                       (replicate 10 ())
       it "should produce output from the value stream until event procs" $
-          head scans `shouldBe` 3
+          head scans `shouldBe` (3 :: Int)
       it "should produce output from the value stream until event procs" $
           last scans `shouldBe` 3
 
@@ -66,17 +68,22 @@ main = hspec $ do
         concat scans `shouldBe` "hey, there..."
 
   describe "fromEvent" $ do
-    let s = fromEvent $ var f ~> onJust
+    let s = do
+          str <- fromEvent (var f ~> onJust)
+          step $ Event str
+          step $ Event "done"
+        f :: Int -> Maybe String
         f 0 = Nothing
         f 1 = Just "YES"
+        f x = Just $ show x
         Identity scans = scanSpline s NoEvent [0,0,0,1,0]
     it "should produce NoEvent until it procs" $
-      scans `shouldBe` [NoEvent,NoEvent,NoEvent,Event "YES",Event "YES"]
+      scans `shouldBe` [NoEvent,NoEvent,NoEvent,Event "YES",Event "done"]
 
   describe "effect" $ do
     let s :: SplineT () String IO ()
         s = do step "Getting the time..."
-               utc <- effect "running" $ getCurrentTime
+               utc <- effect getCurrentTime
                let t = head $ words $ show utc
                step t
                step "The End"
@@ -153,11 +160,14 @@ main = hspec $ do
 --------------------------------------------------------------------------------
 -- Adherance to typeclass laws
 --------------------------------------------------------------------------------
+  -- Spline helpers
   let inc = 1 ~> accumulate (+) 0
       sinc :: Spline a Int (Int, Int)
       sinc = inc `untilEvent` (1 ~> after 3)
       go a = runIdentity (scanSpline a 0 [0..9])
       equal a b = go a `shouldBe` go b
+
+  -- Var helpers
 
   describe "spline's functor instance" $ do
     let sincf = fmap id sinc
@@ -168,6 +178,13 @@ main = hspec $ do
         sdot = fmap (g . f) sinc
         sfdot = fmap g $ fmap f sinc
     it "fmap (g . f) = fmap g . fmap f" $ equal sdot sfdot
+
+  describe "var's applicative instance" $ do
+    let f = (+1)
+        x = 1
+    it "(homomorphism) pure f <*> pure x = pure (f x)" $
+      (fst $ runIdentity $ scanVar (pure f <*> pure x) [0..5])
+      `shouldBe` (fst $ runIdentity $ scanVar (pure $ f x) [0..5])
 
   describe "spline's applicative instance" $ do
     let ident = pure id <*> sinc
