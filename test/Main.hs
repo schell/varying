@@ -3,9 +3,12 @@ module Main where
 import Test.Hspec hiding (after, before)
 import Control.Applicative
 import Control.Varying
+import Control.Monad.Trans.Class
+import Control.Monad.IO.Class
+import Control.Monad.Trans.State
+import Control.Monad (when)
 import Data.Functor.Identity
 import Data.Time.Clock
-import Control.Monad.IO.Class
 
 main :: IO ()
 main = hspec $ do
@@ -31,22 +34,18 @@ main = hspec $ do
           v = anyE [v1,v2,v3]
           scans = fst $ runIdentity $ scanVar v $ replicate 4 ()
       scans `shouldBe` [Event 1, Event 3, Event 2, Event 2]
-  describe "timeAsPercentageOf" $ do
-      it "should run past 1.0" $ do
-          let scans = fst $ runIdentity $ scanVar (timeAsPercentageOf 4)
-                                                  [1,1,1,1,1 :: Float]
-          last scans `shouldSatisfy` (> 1)
-      it "should progress by increments of the total" $ do
-          let scans = fst $ runIdentity $ scanVar (timeAsPercentageOf 4)
-                                                  [1,1,1,1,1 :: Float]
-          scans `shouldBe` [0.25,0.5,0.75,1.0,1.25 :: Float]
-
-  describe "tween" $
+  describe "tween/tweenWith" $ do
       it "should step by the dt passed in" $ do
-          let Identity scans = scanSpline (tween linear 0 4 (4 :: Float))
-                                          0
-                                          [0,1,1,1,1,1]
-          scans `shouldBe` [0,1,2,3,4,(4 :: Double)]
+        let mytween :: Tween Double Double ()
+            mytween = tween_ linear 0 4 4 >> tween_ linear 4 0 4
+            Identity scans = scanTween mytween 0 [0,1,1,1,1,1,1,1,1,1]
+        scans `shouldBe` [0,1,2,3,4,3,2,1,0,0]
+      it "should prevent infinite loops" $ do
+        let mytween :: TweenT Double Double IO ()
+            mytween = tween_ linear 0 4 4 >> tween_ linear 4 0 4 >> mytween
+
+        scans <- scanTween mytween 0 [6,1,1,1]
+        scans `shouldBe` [2, 1, 0, 1]
 
   describe "untilEvent" $ do
       let Identity scans = scanSpline (3 `untilEvent` ((1 :: Var () Int)
@@ -80,10 +79,10 @@ main = hspec $ do
     it "should produce NoEvent until it procs" $
       scans `shouldBe` [NoEvent,NoEvent,NoEvent,Event "YES",Event "done"]
 
-  describe "effect" $ do
+  describe "lift/liftIO" $ do
     let s :: SplineT () String IO ()
         s = do step "Getting the time..."
-               utc <- effect getCurrentTime
+               utc <- liftIO getCurrentTime
                let t = head $ words $ show utc
                step t
                step "The End"

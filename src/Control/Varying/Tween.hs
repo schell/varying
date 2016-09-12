@@ -17,34 +17,39 @@
 --
 {-# LANGUAGE Rank2Types   #-}
 {-# LANGUAGE BangPatterns #-}
-module Control.Varying.Tween (
+module Control.Varying.Tween
+  ( -- * Tweening types
+    Easing
+  , TweenT
+  , Tween
+    -- * Running tweens
+  , runTweenT
+  , scanTween
+  , tweenStream
     -- * Creating tweens
     -- $creation
-    tween,
-    tween_,
-    constant,
-    timeAsPercentageOf,
+  , tween
+  , tween_
+  , constant
     -- * Interpolation functions
     -- $lerping
-    linear,
-    easeInCirc,
-    easeOutCirc,
-    easeInExpo,
-    easeOutExpo,
-    easeInSine,
-    easeOutSine,
-    easeInOutSine,
-    easeInPow,
-    easeOutPow,
-    easeInCubic,
-    easeOutCubic,
-    easeInQuad,
-    easeOutQuad,
+  , linear
+  , easeInCirc
+  , easeOutCirc
+  , easeInExpo
+  , easeOutExpo
+  , easeInSine
+  , easeOutSine
+  , easeInOutSine
+  , easeInPow
+  , easeOutPow
+  , easeInCubic
+  , easeOutCubic
+  , easeInQuad
+  , easeOutQuad
     -- * Writing your own tweens
     -- $writing
-    Tween,
-    Easing
-) where
+  ) where
 
 import Control.Varying.Core
 import Control.Varying.Event
@@ -52,6 +57,9 @@ import Control.Varying.Spline
 import Control.Varying.Time
 import Control.Arrow
 import Control.Applicative
+import Control.Monad.Trans.State
+import Control.Monad.Trans.Class
+import Data.Functor.Identity
 
 --------------------------------------------------------------------------------
 -- $lerping
@@ -125,6 +133,25 @@ easeOutCirc c t b = let t' = (realToFrac t - 1)
 linear :: (Floating t, Real f) => Easing t f
 linear c t b = c * (realToFrac t) + b
 
+type TweenT f t m = SplineT f t (StateT f m)
+type Tween f t = TweenT f t Identity
+
+runTweenT :: (Monad m, Num f)
+          => TweenT f t m x -> f -> f -> m (Either x ((t, TweenT f t m x)), f)
+runTweenT s dt = runStateT (runSplineT s dt)
+
+scanTween :: (Monad m, Num f) => TweenT f t m a -> t -> [f] -> m [t]
+scanTween s t dts = evalStateT (scanSpline s t dts) 0
+
+-- | Converts a tween into a continuous value stream. This is the tween version
+-- of `outputStream`.
+tweenStream :: (Monad m, Num f)
+            => TweenT f t m x -> t -> VarT m f t
+tweenStream s0 t0 = VarT $ f s0 t0 0
+  where f s t l i = do (e, l1) <- runTweenT s i l
+                       case e of
+                         Left _ -> return (t, done t)
+                         Right (b, s1) -> return (b, VarT $ f s1 b l1)
 --------------------------------------------------------------------------------
 -- $creation
 -- The most direct route toward tweening values is to use 'tween'
@@ -141,49 +168,46 @@ linear c t b = c * (realToFrac t) + b
 -- @
 -- testWhile_ isEvent (deltaUTC >>> v)
 --    where v :: VarT IO a (Event Double)
---          v = execSpline 0 $ tween easeOutExpo 0 100 5
+--          v = flip outputStream 0 $ tween easeOutExpo 0 100 5
 -- @
 --
 -- Keep in mind `tween` must be fed time deltas, not absolute time or
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
-tween :: (Applicative m, Monad m, Num t, Fractional f, Ord f)
-      => Easing t f -> t -> t -> f -> SplineT f t m t
---tween f start end dur =
---  let c = end - start
---      b = start
---      vt = h <$> timeAsPercentageOf dur
---      h t = if t >= 1.0
---            then (end, Event end)
---            else (f c t b, NoEvent)
---  in SplineT vt
-tween f start end dur = SplineT (timeAsPercentageOf dur ~> VarT ft)
+--
+-- `tween` concludes returning the latest output value.
+tween :: (Applicative m, Monad m, RealFrac f, RealFrac t)
+      => Easing t f -> t -> t -> f -> TweenT f t m t
+tween f start end dur = SplineT g
   where c = end - start
         b = start
-        ft (!t) = do
-          let x = f c t b
-          return $ if t >= 1.0
-            then (Left x, done $ Right x)
-            else (Left x, VarT ft)
+        g dt = do
+          leftover <- get
+          let t = dt + leftover
+
+          if t == dur
+            then do put 0
+                    return $ Right (end, return end)
+            else if t > dur
+              then do put $ t - dur - dt
+                      return $ Left end
+              else do put t
+                      return $ Right (f c (t/dur) b, SplineT g)
+
 -- | A version of 'tween' that discards the result. It is simply
 --
 -- @
 -- tween f a b c >> return ()
 -- @
 --
-tween_ :: (Applicative m, Monad m, Num t, Fractional f, Ord f)
-       => Easing t f -> t -> t -> f -> SplineT f t m ()
+tween_ :: (Applicative m, Monad m, RealFrac t, RealFrac f)
+       => Easing t f -> t -> t -> f -> TweenT f t m ()
 tween_ f a b c = tween f a b c >> return ()
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
-         => a -> t -> SplineT t a m a
+         => a -> t -> TweenT t a m a
 constant value duration = pure value `untilEvent_` after duration
-
--- | VarTies 0.0 to 1.0 linearly for duration `t` and 1.0 after `t`.
-timeAsPercentageOf :: (Applicative m, Monad m, Ord t, Num t, Fractional t)
-                   => t -> VarT m t t
-timeAsPercentageOf t = (/t) <$> accumulate (+) 0
 
 --------------------------------------------------------------------------------
 -- $writing
@@ -191,22 +215,17 @@ timeAsPercentageOf t = (/t) <$> accumulate (+) 0
 -- value, end value and a duration and return an event stream.
 --
 -- @
--- tweenInOutExpo s e d = execSpline s $ do
---     x <- tween easeInExpo s e (d/2)
---     tween easeOutExpo x e (d/2)
+-- tweenInOutExpo start end dur = do
+--     (dt, x) <- tween easeInExpo start end (dur/2)
+--     tween easeOutExpo x end $ dt + dur/2
 -- @
 --------------------------------------------------------------------------------
--- | An easing function. The parameters or often named `c`, `t` and `b`,
+-- | An easing function. The parameters are often named `c`, `t` and `b`,
 -- where `c` is the total change in value over the complete duration
--- (endValue - startValue), `t` is the current percentage of the duration
--- that has elapsed and `b` is the start value.
+-- (endValue - startValue), `t` is the current percentage (0 to 1) of the
+-- duration that has elapsed and `b` is the start value.
 --
 -- To make things simple only numerical values can be tweened and the type
 -- of time deltas much match the tween's value type. This may change in the
 -- future :)
 type Easing t f = t -> f -> t -> t
-
--- | A linear interpolation between two values over some duration.
--- A `Tween` takes three values - a start value, an end value and
--- a duration.
-type Tween m t f = t -> t -> f -> VarT m f (Event t)

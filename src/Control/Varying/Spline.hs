@@ -30,10 +30,8 @@ module Control.Varying.Spline (
     -- * Running and streaming
     scanSpline,
     outputStream,
-    resultStream,
     -- * Combinators
     step,
-    effect,
     fromEvent,
     untilEvent,
     untilEvent_,
@@ -54,6 +52,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
 import Control.Applicative
 import Data.Functor.Identity
+import Data.Function
 import Data.Monoid
 
 -- | 'SplineT' shares all the types of 'VarT' and adds a result value. Its
@@ -63,26 +62,30 @@ import Data.Monoid
 -- Much like the State monad it has an "internal state" and an eventual
 -- result value, where the internal state is the output value. The result
 -- value is used only in determining the next spline to sequence.
-newtype SplineT a b m c = SplineT { unSplineT :: VarT m a (Either b c) }
+--newtype SplineT a b m c = SplineT { unSplineT :: VarT m a (Either b c) }
+newtype SplineT a b m c = SplineT { runSplineT :: a -> m (Either c (b, SplineT a b m c)) }
 
--- | A spline responds to bind by running until it produces an eventual value,
+-- | A spline is a functor by applying the function to the result of the
+-- spline.
+instance (Applicative m, Monad m) => Functor (SplineT a b m) where
+  fmap f (SplineT s) = SplineT $ \a -> s a >>= \case
+    Left c        -> return $ Left $ f c
+    Right (b, s1) -> return $ Right (b, fmap f s1)
+
+-- | A spline responds to bind by running until it concludes in a value,
 -- then uses that value to run the next spline.
 instance (Applicative m, Monad m) => Monad (SplineT a b m) where
-  return x = SplineT $ VarT $ const $ return (Right x, done $ Right x)
-  s >>= f = SplineT $ VarT $ g $ unSplineT s
-    where g v (!a) = do (e, v1) <- runVarT v a
-                        case e of
-                          Left  (!b) -> return (Left b, VarT $ g v1)
-                          Right (!c) -> runVarT (unSplineT $ f c) a
+  return = SplineT . const . return . Left
+  (SplineT s0) >>= f = SplineT $ g s0
+    where g s a = do e <- s a
+                     case e of
+                       Left  c               -> runSplineT (f c) a
+                       Right (b, SplineT s1) -> return $ Right (b, SplineT $ g s1)
 
--- | A spline is a functor by applying the function to the result.
-instance (Applicative m, Monad m) => Functor (SplineT a b m) where
-  fmap f (SplineT v) = SplineT ((f <$>) <$> v)
---
----- A spline responds to 'pure' by returning a spline that never produces an
----- output value and immediately returns the argument. It responds to '<*>' by
----- applying the left arguments result value (the function) to the right
----- arguments result value (the argument), sequencing them both in serial.
+-- A spline responds to 'pure' by returning a spline that never produces an
+-- output value and immediately returns the argument. It responds to '<*>' by
+-- applying the left arguments result value (the function) to the right
+-- arguments result value (the argument), sequencing them both in serial.
 instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
   pure = return
   sf <*> sx = do
@@ -90,26 +93,17 @@ instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
     x <- sx
     return $ f x
 
--- | Run the side effect and use its result as the spline's result. This
--- discards the output argument and switches immediately, but the argument is
--- needed to construct the spline. For this reason spline's can't be an instance
--- of MonadTrans or MonadIO.
-effect :: (Applicative m, Monad m) => m x -> SplineT a b m x
-effect f = SplineT $ VarT $ const $ do
-  x <- f
-  return (Right x, done $ Right x)
-
-#if MIN_VERSION_base(4,8,0)
+-- #if MIN_VERSION_base(4,8,0)
 -- | A spline is a transformer by using @effect@.
 instance MonadTrans (SplineT a b) where
-  lift = effect
+  lift f = SplineT $ const $ f >>= return . Left
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value.
-instance (Monoid b, Applicative m, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
+instance (Applicative m, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
   liftIO = lift . liftIO
-#endif
-
+-- #endif
+--
 -- | A SplineT monad parameterized with Identity that takes input of type @a@,
 -- output of type @b@ and a result value of type @c@.
 type Spline a b c = SplineT a b Identity c
@@ -117,12 +111,11 @@ type Spline a b c = SplineT a b Identity c
 -- | Evaluates a spline into a value stream of its output type.
 outputStream :: (Applicative m, Monad m)
              => SplineT a b m c -> b -> VarT m a b
-outputStream s b0 = VarT $ f (unSplineT s) b0
-  where f v0 (!b) (!a) = do
-          (e, v) <- runVarT v0 a
-          return $ case e of
-            Left b1 -> (b1, VarT $ f v b1)
-            Right _ -> (b , done b)
+outputStream (SplineT s0) b0 = VarT $ f s0 b0
+  where f s b a = do e <- s a
+                     case e of
+                       Left  _                -> return (b, done b)
+                       Right (b1, SplineT s1) -> return (b1, VarT $ f s1 b1)
 
 -- | Run the spline over the input values, gathering the output values in a
 -- list.
@@ -130,20 +123,13 @@ scanSpline :: (Applicative m, Monad m)
            => SplineT a b m c -> b -> [a] -> m [b]
 scanSpline s b = fmap fst <$> scanVar (outputStream s b)
 
-resultStream :: (Applicative m, Monad m)
-             => SplineT a b m c -> VarT m a (Maybe c)
-resultStream s = VarT $ f (unSplineT s)
-  where f v0 (!a) = do
-          (e, v) <- runVarT v0 a
-          return $ case e of
-            Left _  -> (Nothing, VarT $ f v)
-            Right c -> (Just c, done $ Just c)
-
 -- | Create a spline from an event stream.
 fromEvent :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a (Event b) m b
-fromEvent ve = SplineT $ f <$> ve
-  where f (Event b) = Right b
-        f e = Left e
+fromEvent ve = SplineT $ \a -> do
+  (e, ve1) <- runVarT ve a
+  return $ case e of
+    Event b -> Left b
+    NoEvent -> Right (NoEvent, fromEvent ve1)
 
 -- | Create a spline from a value stream and an event stream. The spline
 -- uses the value stream as its output value. The spline will run until
@@ -153,18 +139,18 @@ fromEvent ve = SplineT $ f <$> ve
 untilEvent :: (Applicative m, Monad m)
            => VarT m a b -> VarT m a (Event c)
            -> SplineT a b m (b,c)
-untilEvent v ve = SplineT $ f <$> v <*> ve
-  where f b (Event c) = Right (b, c)
-        f b _         = Left b
+untilEvent v ve = SplineT $ f ((,) <$> v <*> ve)
+  where f vve a = do t <-runVarT vve a
+                     return $ case t of
+                       ((b, NoEvent), vve1) -> Right (b, SplineT $ f vve1)
+                       ((b, Event c),    _) -> Left (b, c)
 
 -- | A variant of 'untilEvent' that only results in the left result,
 -- discarding the right result.
 untilEvent_ :: (Applicative m, Monad m)
             => VarT m a b -> VarT m a (Event c)
             -> SplineT a b m b
-untilEvent_ v ve = SplineT $ f <$> v <*> ve
-  where f b (Event _) = Right b
-        f b _ = Left b
+untilEvent_ v ve = fst <$> untilEvent v ve
 
 -- | A variant of 'untilEvent' that only results in the right result,
 -- discarding the left result.
@@ -185,71 +171,75 @@ _untilEvent_ v ve = void $ _untilEvent v ve
 race :: (Applicative m, Monad m)
      => (a -> b -> c) -> SplineT i a m d -> SplineT i b m e
      -> SplineT i c m (Either d e)
-race f (SplineT va) (SplineT vb) = SplineT $ VarT $ go va vb
-  where go va1 vb1 (!i) = runVarT va1 i >>= \case
-          (Right d,   _) -> return (Right $ Left d, done $ Right $ Left d)
-          (Left  a, va2) -> runVarT vb1 i >>= \case
-            (Right e,   _) -> return (Right $ Right e, done $ Right $ Right e)
-            (Left  b, vb2) -> return (Left $ f a b, VarT $ go va2 vb2)
+race f sa0 sb0 = SplineT (g sa0 sb0)
+  where g sa sb i = runSplineT sa i >>= \case
+          Left d -> return $ Left $ Left d
+          Right (a, sa1) -> runSplineT sb i >>= \case
+            Left e -> return $ Left $ Right e
+            Right (b, sb1) -> return $ Right (f a b, SplineT $ g sa1 sb1)
 
 raceMany :: (Applicative m, Monad m, Monoid b)
          => [SplineT a b m c] -> SplineT a b m c
 raceMany [] = pure mempty `_untilEvent` never
-raceMany ss = SplineT $ VarT $ f [] (map unSplineT ss) mempty
-  where f ys []     b _    = return (Left b, VarT $ f [] ys mempty)
-        f ys (v:vs) b (!a) = runVarT v a >>= \case
-          (Right c, _)   -> return (Right c, done $ Right c)
-          (Left  b1, v1) -> f (ys ++ [v1]) vs (b <> b1) a
+raceMany ss = SplineT $ f [] (map runSplineT ss) mempty
+  where f ys []     b _    = return $ Right (b, SplineT $ f [] ys mempty)
+        f ys (v:vs) b a = v a >>= \case
+          Left c -> return $ Left c
+          Right (b1, s) -> f (ys ++ [runSplineT s]) vs (b <> b1) a
 
 -- | Run two splines in parallel, combining their output. Once both splines
 -- have concluded, return the results of each in a tuple.
 merge :: (Applicative m, Monad m)
      => (b -> b -> b)
      -> SplineT a b m c -> SplineT a b m d -> SplineT a b m (c, d)
-merge apnd s1 s2 = SplineT $ VarT $ f (unSplineT s1) (unSplineT s2)
+merge apnd s1 s2 = SplineT $ f s1 s2
 
-  where r c d = let e = (c, d) in return (Right e, done $ Right e)
+  where r c d = return $ Left (c, d)
 
-        fr c vb (!a) = runVarT vb a >>= \case
-          (Right d,   _) -> r c d
-          ( Left b, vb1) -> return (Left b, VarT $ fr c vb1)
+        fr c vb a = runSplineT vb a >>= \case
+          Left d -> r c d
+          Right (b, vb1) -> return $ Right (b, SplineT $ fr c vb1)
 
-        fl d va (!a) = runVarT va a >>= \case
-          (Right c,   _) -> r c d
-          ( Left b, va1) -> return (Left b, VarT $ fl d va1)
+        fl d va a = runSplineT va a >>= \case
+          Left c -> r c d
+          Right (b, va1) -> return $ Right (b, SplineT $ fl d va1)
 
-        f va vb (!a) = runVarT va a >>= \case
-          (Right c,   _) -> fr c vb a
-          (Left b1, va1) -> runVarT vb a >>= \case
-            (Right d, _)   -> return (Left b1, VarT $ fl d va1)
-            (Left b2, vb1) -> return (Left $ apnd b1 b2, VarT $ f va1 vb1)
+        f va vb a = runSplineT va a >>= \case
+          Left c -> fr c vb a
+          Right (b1, va1) -> runSplineT vb a >>= \case
+            Left d -> return $ Right (b1, SplineT $ fl d va1)
+            Right (b2, vb1) -> return $ Right $ (apnd b1 b2, SplineT $ f va1 vb1)
 
 -- | Capture the spline's last output value and tuple it with the
 -- spline's result. This is helpful when you want to sample the last
 -- output value in order to determine the next spline to sequence.
 capture :: (Applicative m, Monad m)
         => SplineT a b m c -> SplineT a b m (Maybe b, c)
-capture s = SplineT $ VarT $ f Nothing $ unSplineT s
-    where f mb v (!a) = runVarT v a >>= \case
-            (Right c, _)  -> return (Right (mb, c), done $ Right (mb, c))
-            (Left  b, v1) -> return (Left b, VarT $ f (Just b) v1)
+capture = SplineT . f Nothing
+    where f mb s a = runSplineT s a >>= \case
+            Left c -> return $ Left (mb, c)
+            Right (b, s1) -> return $ Right (b, SplineT $ f (Just b) s1)
 
 -- | Produce the argument as an output value exactly once.
 step :: (Applicative m, Monad m) => b -> SplineT a b m ()
-step b = SplineT $ VarT $ const $ return (Left b, done $ Right ())
+step b = SplineT $ const $ return $ Right (b, return ())
 
 -- | Map the output value of a spline.
 mapOutput :: (Applicative m, Monad m)
           => VarT m a (b -> t) -> SplineT a b m c -> SplineT a t m c
-mapOutput vf (SplineT vx) = SplineT $ (g <$> vf) <*> vx
-    where g f (Left  b) = Left $ f b
-          g _ (Right c) = Right c
+mapOutput vf0 s0 = SplineT $ g vf0 s0
+    where g vf s a = do
+            (f, vf1) <- runVarT vf a
+            runSplineT s a >>= \case
+              Left c -> return $ Left c
+              Right (b, s1) -> return $ Right (f b, SplineT $ g vf1 s1)
 
 -- | Map the input value of a spline.
 adjustInput :: (Applicative m, Monad m)
             => VarT m a (a -> r) -> SplineT r b m c -> SplineT a b m c
-adjustInput vf0 s = SplineT $ VarT $ g vf0 $ unSplineT s
-  where g vf vx (!a) = do
+adjustInput vf0 s = SplineT $ g vf0 s
+  where g vf sx (!a) = do
           (f, vf1) <- runVarT vf a
-          (b, vx1) <- runVarT vx $ f a
-          return (b, VarT $ g vf1 vx1)
+          runSplineT sx (f a) >>= \case
+           Left c -> return $ Left c
+           Right (b, sx1) -> return $ Right (b, SplineT $ g vf1 sx1)

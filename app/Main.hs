@@ -17,7 +17,7 @@ newtype Delta = Delta { unDelta :: Float }
 -- loops forever. This spline takes float values of delta time as input,
 -- outputs the current x value at every step and would result in () if it
 -- terminated.
-tweenx :: (Applicative m, Monad m) => SplineT Float Float m Float
+tweenx :: (Applicative m, Monad m) => TweenT Float Float m Float
 tweenx = do
     -- Tween from 0 to 100 over 1 second
     x <- tween easeOutExpo 0 50 1
@@ -28,7 +28,7 @@ tweenx = do
 
 -- A quadratic tween back and forth from 0 to 100 over 2 seconds that never
 -- ends.
-tweeny :: (Applicative m, Monad m) => SplineT Float Float m Float
+tweeny :: (Applicative m, Monad m) => TweenT Float Float m Float
 tweeny = do
     y <- tween easeOutExpo 50 0 1
     _ <- tween easeOutExpo y 50 1
@@ -44,8 +44,8 @@ backAndForth =
     -- Turn our splines into continuous output streams. We must provide
     -- a starting value since splines are not guaranteed to be defined at
     -- their edges.
-    let x = outputStream tweenx 0
-        y = outputStream tweeny 0
+    let x = tweenStream tweenx 0
+        y = tweenStream tweeny 0
     in
     -- Construct a varying Point that takes time as an input.
     (Point <$> x <*> y)
@@ -82,6 +82,4 @@ loop v t = do
       f ' ' b = b
       f _ _ = ' '
   putStrLn str
-  --threadDelay 10
   loop vNext t1
-
