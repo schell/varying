@@ -140,12 +140,13 @@ runTweenT :: (Monad m, Num f)
           => TweenT f t m x -> f -> f -> m (Either x ((t, TweenT f t m x)), f)
 runTweenT s dt = runStateT (runSplineT s dt)
 
-scanTween :: (Monad m, Num f) => TweenT f t m a -> t -> [f] -> m [t]
+scanTween :: (Functor m, Applicative m, Monad m, Num f)
+          => TweenT f t m a -> t -> [f] -> m [t]
 scanTween s t dts = evalStateT (scanSpline s t dts) 0
 
 -- | Converts a tween into a continuous value stream. This is the tween version
 -- of `outputStream`.
-tweenStream :: (Monad m, Num f)
+tweenStream :: (Applicative m, Monad m, Num f)
             => TweenT f t m x -> t -> VarT m f t
 tweenStream s0 t0 = VarT $ f s0 t0 0
   where f s t l i = do (e, l1) <- runTweenT s i l

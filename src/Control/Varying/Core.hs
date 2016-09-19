@@ -62,9 +62,9 @@ type Var a b = VarT Identity a b
 -- 'runVarT' with an input value of type 'a' yields a "step", which is a value
 -- of type 'b' and a new 'VarT' for yielding the next value.
 newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
-                  -- ^ Given an input value, return a computation that effectfully
-                  -- produces an output value and a new stream for producing the next
-                  -- sample.
+                  -- ^ Given an input value, return a computation that
+                  -- effectfully produces an output value and a new stream for
+                  -- producing the next sample.
 --------------------------------------------------------------------------------
 -- $creation
 -- You can create a pure value stream by lifting a function @(a -> b)@
