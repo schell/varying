@@ -22,4 +22,5 @@ change log
           since 7.6
 
 0.6.0.0 - changed the internal type of SplineT to use Either, reducing unused
-          output values and preventing time/space leaks
+          output values and preventing time/space leaks. Updated tween types.
+          Added withTween(_).

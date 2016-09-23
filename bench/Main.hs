@@ -16,9 +16,9 @@ main = do
                                      , bench "64" $ nf (run $ chain 64) 0
                                      , bench "128" $ nf (run $ chain 128) 0
                                      ]
-                  , bgroup "SplineT"
-                      [ bench "runSplineT" $
-                          nf (run $ outputStream spline 0) 0
+                  , bgroup "TweenT"
+                      [ bench "tweenStream" $
+                          nf (run $ tweenStream myTween 0) 0
                       ]
                   ]
     return ()
@@ -27,8 +27,8 @@ chain :: Int -> Var Int Int
 chain n = seq x x
   where x = foldl (~>) (var (+1)) $ take (n - 1) $ cycle [var (+1)]
 
-spline :: Spline Float Float ()
-spline = do
-  void $ tween easeInExpo 0 100 1
-  void $ tween easeOutExpo 100 0 1
-  spline
+myTween :: Tween Float Float ()
+myTween = do
+  void $ tween_ easeInExpo 0 100 1
+  void $ tween_ easeOutExpo 100 0 1
+  myTween
