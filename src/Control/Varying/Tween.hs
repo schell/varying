@@ -31,6 +31,8 @@ module Control.Varying.Tween
   , tween
   , tween_
   , constant
+  , withTween
+  , withTween_
     -- * Interpolation functions
     -- $lerping
   , linear
@@ -177,7 +179,7 @@ tweenStream s0 t0 = VarT $ f s0 t0 0
 -- more than once ;)
 --
 -- `tween` concludes returning the latest output value.
-tween :: (Applicative m, Monad m, RealFrac f, RealFrac t)
+tween :: (Applicative m, Monad m, Real f, Fractional f, Real t, Fractional t)
       => Easing t f -> t -> t -> f -> TweenT f t m t
 tween f start end dur = SplineT g
   where c = end - start
@@ -201,9 +203,23 @@ tween f start end dur = SplineT g
 -- tween f a b c >> return ()
 -- @
 --
-tween_ :: (Applicative m, Monad m, RealFrac t, RealFrac f)
+tween_ :: (Applicative m, Monad m, Real t, Fractional t, Real f, Fractional f)
        => Easing t f -> t -> t -> f -> TweenT f t m ()
 tween_ f a b c = tween f a b c >> return ()
+
+-- | A version of 'tween' that maps its output using the given constant
+-- function.
+-- @
+-- withTween ease from to dur f = mapOutput (pure f) $ tween ease from to dur
+-- @
+withTween :: (Applicative m, Monad m, Real t, Fractional t, Real a, Fractional a)
+          => Easing t a -> t -> t -> a -> (t -> x) -> TweenT a x m t
+withTween ease from to dur f = mapOutput (pure f) $ tween ease from to dur
+
+-- | A version of 'withTween' that discards its output.
+withTween_ :: (Applicative m, Monad m, Real t, Fractional t, Real a, Fractional a)
+           => Easing t a -> t -> t -> a -> (t -> x) -> TweenT a x m ()
+withTween_ ease from to dur f = withTween ease from to dur f >> return ()
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
