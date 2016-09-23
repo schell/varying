@@ -13,25 +13,24 @@ data Point = Point { px :: Float
 
 newtype Delta = Delta { unDelta :: Float }
 
--- An exponential tween back and forth from 0 to 100 over 2 seconds that
+-- An exponential tween back and forth from 0 to 50 over 1 seconds that
 -- loops forever. This spline takes float values of delta time as input,
--- outputs the current x value at every step and would result in () if it
--- terminated.
+-- outputs the current x value at every step.
 tweenx :: (Applicative m, Monad m) => TweenT Float Float m Float
 tweenx = do
-    -- Tween from 0 to 100 over 1 second
-    x <- tween easeOutExpo 0 50 1
+    -- Tween from 0 to 50 over 1 second
+    tween_ easeOutExpo 0 50 1
     -- Chain another tween back to the starting position
-    _ <- tween easeOutExpo x 0 1
+    tween_ easeOutExpo 50 0 1
     -- Loop forever
     tweenx
 
--- A quadratic tween back and forth from 0 to 100 over 2 seconds that never
+-- A quadratic tween back and forth from 0 to 50 over 1 seconds that never
 -- ends.
 tweeny :: (Applicative m, Monad m) => TweenT Float Float m Float
 tweeny = do
-    y <- tween easeOutExpo 50 0 1
-    _ <- tween easeOutExpo y 50 1
+    tween_ easeOutExpo 50 0 1
+    tween_ easeOutExpo 0 50 1
     tweeny
 
 -- Our time signal counts input delta time samples.
@@ -70,7 +69,8 @@ main = do
 loop :: Var Delta Point -> UTCTime -> IO ()
 loop v t = do
   t1 <- getCurrentTime
-  -- Here we'll run in the Identity monad using a fixed time step.
+  -- Here we'll run in the Identity monad using a time delta provided by
+  -- getCurrentTime and diffUTCTime.
   let dt = realToFrac $ diffUTCTime t1 t
       Identity (Point x y, vNext) = runVarT v $ Delta dt
       xStr = replicate (round x) ' ' ++ "x" ++ replicate (50 - round x) ' '
