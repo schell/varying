@@ -2,7 +2,6 @@ module Main where
 
 import Control.Varying
 import Control.Applicative
-import Control.Concurrent (forkIO, killThread)
 import Data.Functor.Identity
 import Data.Time.Clock
 
@@ -55,16 +54,7 @@ backAndForth =
         <~ time
 
 main :: IO ()
-main = do
-    putStrLn "An example of value streams using the varying library."
-    putStrLn "Enter a newline to continue, and then a newline to quit"
-    _ <- getLine
-
-    t   <- getCurrentTime
-    tId <- forkIO $ loop backAndForth t
-
-    _ <- getLine
-    killThread tId
+main = getCurrentTime >>= loop backAndForth
 
 loop :: Var Delta Point -> UTCTime -> IO ()
 loop v t = do

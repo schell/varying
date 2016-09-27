@@ -1,0 +1,15 @@
+resolver: nightly-2016-09-08
+compiler: ghcjs-0.2.0.820160908_ghc-8.0.1
+compiler-check: match-exact
+setup-info:
+  ghcjs:
+    source:
+      ghcjs-0.2.0.820160908_ghc-8.0.1:
+         url: "http://tolysz.org/ghcjs/untested/ghc-8.0-2016-09-08-nightly-2016-09-08-820160908.tar.gz"
+         sha1: 68ab94c735ba5173603fb24fa7804541600750e1
+allow-newer: true
+
+packages:
+- .
+
+extra-deps: []
