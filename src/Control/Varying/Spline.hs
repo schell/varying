@@ -81,6 +81,7 @@ instance (Applicative m, Monad m) => Monad (SplineT a b m) where
                      case e of
                        Left  c               -> runSplineT (f c) a
                        Right (b, SplineT s1) -> return $ Right (b, SplineT $ g s1)
+-- Note [1]
 
 -- A spline responds to 'pure' by returning a spline that never produces an
 -- output value and immediately returns the argument. It responds to '<*>' by
@@ -243,3 +244,113 @@ adjustInput vf0 s = SplineT $ g vf0 s
           runSplineT sx (f a) >>= \case
            Left c -> return $ Left c
            Right (b, sx1) -> return $ Right (b, SplineT $ g vf1 sx1)
+
+
+-- [1] Proof of the monad laws:
+--
+-- left identity
+-- =============
+-- return c >>= f = f c
+--
+-- -- Definition of return
+-- SplineT (\_ -> return (Left c)) >>= f
+--
+-- -- Definition of >>=
+-- SplineT (g (\_ -> return (Left c)))
+--   where
+--     g s a = s a >>= \case
+--               Left c' -> runSplineT (f c') a
+--               Right (b, SplineT s1) -> return (Right (b, SplineT (g s1)))
+--
+-- -- Application
+-- SplineT (\a -> (\_ -> return (Left c)) a >>= \case
+--           Left c' -> runSplineT (f c') a
+--           Right (b, SplineT s1) -> return (Right (b, SplineT (g s1))))
+--   where
+--     g = ...
+--
+-- -- Application
+-- SplineT (\a -> return (Left c) >>= \case
+--           Left c' -> runSplineT (f c') a
+--           Right (b, SplineT s1) -> return (Right (b, SplineT (g s1))))
+--   where
+--     g = ...
+--
+-- -- return x >>= f = f x
+-- SplineT (\a ->
+--           case Left c of
+--             Left c' -> runSplineT (f c') a
+--             Right (b, SplineT s1) -> return (Right (b, SplineT (g s1))))
+--   where
+--     g = ...
+--
+-- -- Evaluation
+-- SplineT (\a -> runSplineT (f c) a)
+--
+-- -- Eta reduction
+-- SplineT (runSplineT (f c))
+--
+-- -- Newtype
+-- f c
+--
+--
+-- right identity
+-- ==============
+-- m >>= return = m
+--
+-- -- Definition of >>=
+-- SplineT (g (runSplineT m))
+--   where
+--     g s a = s a >>= \case
+--               Left c -> runSplineT (return c) a
+--               Right (b, SplineT s1) -> return (Right (b, SplineT (g s1)))
+--
+--   -- [Lemma 1] g = id
+--   -- Case 1: Left
+--   \s a = s a >>= \(Left c) -> runSplineT (return c) a
+--
+--   -- Definition of return
+--   \s a = s a >>= \(Left c) -> runSplineT (SplineT (\_ -> return (Left c))) a
+--
+--   -- Newtype
+--   \s a = s a >>= \(Left c) -> (\_ -> return (Left c)) a
+--
+--   -- Application
+--   \s a = s a >>= \(Left c) -> return (Left c)
+--
+--   -- Eta reduction
+--   \s a = s a >>= return
+--
+--   -- m >>= return = return
+--   \s a = s a
+--
+--   -- Definition of id
+--   id
+--
+--   -- Case 2: Right
+--   \s a -> s a >>= \(Right (b, SplineT s1)) -> return (Right (b, SplineT (g s1)))
+--
+--   -- Lemma 1
+--   \s a -> s a >>= \(Right (b, SplineT s1)) -> return (Right (b, SplineT s1))
+--
+--   -- Eta reduction
+--   \s a -> s a >>= return
+--
+--   -- m >>= return = m
+--   \s a -> s a
+--
+--   -- Definition of id
+--   id
+--
+-- -- Lemma 1
+-- SplineT (runSplineT m)
+--
+-- -- Newtype
+-- m
+--
+--
+-- application
+-- ===========
+-- (m >>= f) >>= g = m >>= (\x -> f x >>= g)
+--
+-- TODO
