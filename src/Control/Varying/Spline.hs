@@ -250,99 +250,120 @@ adjustInput vf0 s = SplineT $ g vf0 s
 --
 -- left identity
 -- =============
--- return c >>= f = f c
+-- k =<< return c = k c
+--
+-- -- Definition of =<<
+-- fix (\f s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (k c) a
+--       Right s' -> return (Right (fmap f s')))) (return c)
+--
+-- -- Definition of fix
+-- (\s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (k c) a
+--       Right s' -> return (Right (fmap (k =<<) s')))) (return c)
+--
+-- -- Application
+-- SplineT (\a ->
+--   runSplineT (return c) a >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
 --
 -- -- Definition of return
--- SplineT (\_ -> return (Left c)) >>= f
+-- SplineT (\a ->
+--   runSplineT (SplineT (\_ -> return (Left c))) a >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
 --
--- -- Definition of >>=
--- SplineT (g (\_ -> return (Left c)))
---   where
---     g s a = s a >>= \case
---               Left c' -> runSplineT (f c') a
---               Right (b, SplineT s1) -> return (Right (b, SplineT (g s1)))
---
--- -- Application
--- SplineT (\a -> (\_ -> return (Left c)) a >>= \case
---           Left c' -> runSplineT (f c') a
---           Right (b, SplineT s1) -> return (Right (b, SplineT (g s1))))
---   where
---     g = ...
+-- -- Newtype
+-- SplineT (\a ->
+--   (\_ -> return (Left c)) a >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
 --
 -- -- Application
--- SplineT (\a -> return (Left c) >>= \case
---           Left c' -> runSplineT (f c') a
---           Right (b, SplineT s1) -> return (Right (b, SplineT (g s1))))
---   where
---     g = ...
+-- SplineT (\a ->
+--   return (Left c) >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
 --
 -- -- return x >>= f = f x
 -- SplineT (\a ->
---           case Left c of
---             Left c' -> runSplineT (f c') a
---             Right (b, SplineT s1) -> return (Right (b, SplineT (g s1))))
---   where
---     g = ...
+--   case (Left c) of
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
 --
--- -- Evaluation
--- SplineT (\a -> runSplineT (f c) a)
+-- -- Case evaluation
+-- SplineT (\a -> runSplineT (k c) a)
 --
 -- -- Eta reduction
--- SplineT (runSplineT (f c))
+-- SplineT (runSplineT (k c))
 --
 -- -- Newtype
--- f c
+-- k c
 --
 --
 -- right identity
 -- ==============
--- m >>= return = m
+-- return =<< m = m
 --
--- -- Definition of >>=
--- SplineT (g (runSplineT m))
---   where
---     g s a = s a >>= \case
---               Left c -> runSplineT (return c) a
---               Right (b, SplineT s1) -> return (Right (b, SplineT (g s1)))
+-- -- Definition of =<<
+-- fix (\f s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (return c) a
+--       Right s' -> return (Right (fmap f s')))) m
 --
---   -- [Lemma 1] g = id
---   -- Case 1: Left
---   \s a = s a >>= \(Left c) -> runSplineT (return c) a
+-- -- Definition of fix
+-- (\s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (return c) a
+--       Right s' -> return (Right (fmap (return =<<) s')))) m
 --
---   -- Definition of return
---   \s a = s a >>= \(Left c) -> runSplineT (SplineT (\_ -> return (Left c))) a
+-- -- Application
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> runSplineT (return c) a
+--     Right s' -> return (Right (fmap (return =<<) s')))
 --
---   -- Newtype
---   \s a = s a >>= \(Left c) -> (\_ -> return (Left c)) a
+-- -- Definition of return
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> runSplineT (SplineT (\_ -> return (Left c))) a
+--     Right s' -> return (Right (fmap (return =<<) s')))
 --
---   -- Application
---   \s a = s a >>= \(Left c) -> return (Left c)
+-- -- Newtype
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> (\_ -> return (Left c)) a
+--     Right s' -> return (Right (fmap (return =<<) s')))
 --
---   -- Eta reduction
---   \s a = s a >>= return
+-- -- Application
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> return (Left c)
+--     Right s' -> return (Right (fmap (return =<<) s')))
 --
---   -- m >>= return = return
---   \s a = s a
+-- -- m >>= return . f = fmap f m
+-- SplineT (\a -> fmap (either id (fmap (return =<<))) (runSplineT m a))
 --
---   -- Definition of id
---   id
+-- -- Coinduction
+-- SplineT (\a -> fmap (either id (fmap id)) (runSplineT m a))
 --
---   -- Case 2: Right
---   \s a -> s a >>= \(Right (b, SplineT s1)) -> return (Right (b, SplineT (g s1)))
+-- -- fmap id = id
+-- SplineT (\a -> fmap (either id id) (runSplineT m a))
 --
---   -- Lemma 1
---   \s a -> s a >>= \(Right (b, SplineT s1)) -> return (Right (b, SplineT s1))
+-- -- either id id = id
+-- SplineT (\a -> fmap id (runSplineT m a))
 --
---   -- Eta reduction
---   \s a -> s a >>= return
+-- -- fmap id = id
+-- SplineT (\a -> runSplineT m a)
 --
---   -- m >>= return = m
---   \s a -> s a
---
---   -- Definition of id
---   id
---
--- -- Lemma 1
+-- -- Eta reduction
 -- SplineT (runSplineT m)
 --
 -- -- Newtype
