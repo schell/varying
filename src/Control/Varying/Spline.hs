@@ -81,6 +81,7 @@ instance (Applicative m, Monad m) => Monad (SplineT a b m) where
                      case e of
                        Left  c               -> runSplineT (f c) a
                        Right (b, SplineT s1) -> return $ Right (b, SplineT $ g s1)
+-- Note [1]
 
 -- A spline responds to 'pure' by returning a spline that never produces an
 -- output value and immediately returns the argument. It responds to '<*>' by
@@ -243,3 +244,134 @@ adjustInput vf0 s = SplineT $ g vf0 s
           runSplineT sx (f a) >>= \case
            Left c -> return $ Left c
            Right (b, sx1) -> return $ Right (b, SplineT $ g vf1 sx1)
+
+
+-- [1] Proof of the monad laws:
+--
+-- left identity
+-- =============
+-- k =<< return c = k c
+--
+-- -- Definition of =<<
+-- fix (\f s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (k c) a
+--       Right s' -> return (Right (fmap f s')))) (return c)
+--
+-- -- Definition of fix
+-- (\s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (k c) a
+--       Right s' -> return (Right (fmap (k =<<) s')))) (return c)
+--
+-- -- Application
+-- SplineT (\a ->
+--   runSplineT (return c) a >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
+--
+-- -- Definition of return
+-- SplineT (\a ->
+--   runSplineT (SplineT (\_ -> return (Left c))) a >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
+--
+-- -- Newtype
+-- SplineT (\a ->
+--   (\_ -> return (Left c)) a >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
+--
+-- -- Application
+-- SplineT (\a ->
+--   return (Left c) >>= \case
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
+--
+-- -- return x >>= f = f x
+-- SplineT (\a ->
+--   case (Left c) of
+--     Left c -> runSplineT (k c) a
+--     Right s' -> return (Right (fmap (k =<<) s')))
+--
+-- -- Case evaluation
+-- SplineT (\a -> runSplineT (k c) a)
+--
+-- -- Eta reduction
+-- SplineT (runSplineT (k c))
+--
+-- -- Newtype
+-- k c
+--
+--
+-- right identity
+-- ==============
+-- return =<< m = m
+--
+-- -- Definition of =<<
+-- fix (\f s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (return c) a
+--       Right s' -> return (Right (fmap f s')))) m
+--
+-- -- Definition of fix
+-- (\s ->
+--   SplineT (\a ->
+--     runSplineT s a >>= \case
+--       Left c -> runSplineT (return c) a
+--       Right s' -> return (Right (fmap (return =<<) s')))) m
+--
+-- -- Application
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> runSplineT (return c) a
+--     Right s' -> return (Right (fmap (return =<<) s')))
+--
+-- -- Definition of return
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> runSplineT (SplineT (\_ -> return (Left c))) a
+--     Right s' -> return (Right (fmap (return =<<) s')))
+--
+-- -- Newtype
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> (\_ -> return (Left c)) a
+--     Right s' -> return (Right (fmap (return =<<) s')))
+--
+-- -- Application
+-- SplineT (\a ->
+--   runSplineT m a >>= \case
+--     Left c -> return (Left c)
+--     Right s' -> return (Right (fmap (return =<<) s')))
+--
+-- -- m >>= return . f = fmap f m
+-- SplineT (\a -> fmap (either id (fmap (return =<<))) (runSplineT m a))
+--
+-- -- Coinduction
+-- SplineT (\a -> fmap (either id (fmap id)) (runSplineT m a))
+--
+-- -- fmap id = id
+-- SplineT (\a -> fmap (either id id) (runSplineT m a))
+--
+-- -- either id id = id
+-- SplineT (\a -> fmap id (runSplineT m a))
+--
+-- -- fmap id = id
+-- SplineT (\a -> runSplineT m a)
+--
+-- -- Eta reduction
+-- SplineT (runSplineT m)
+--
+-- -- Newtype
+-- m
+--
+--
+-- application
+-- ===========
+-- (m >>= f) >>= g = m >>= (\x -> f x >>= g)
+--
+-- TODO
