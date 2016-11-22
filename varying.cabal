@@ -10,7 +10,7 @@ name:                varying
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.6.0.0
+version:             1.0.0.0
 
 -- A short (one-line) description of the package.
 synopsis:            FRP through value streams and monadic splines.
@@ -52,7 +52,6 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 extra-source-files:  README.md, changelog.md
-
 
 source-repository head
   type:     git
@@ -114,7 +113,6 @@ test-suite varying-test
                      , hspec
                      , QuickCheck
 
-
   -- Directories containing source files.
   hs-source-dirs:      test
 
@@ -133,7 +131,6 @@ benchmark varying-bench
                      , transformers
                      , varying
                      , criterion
-
 
   -- Directories containing source files.
   hs-source-dirs:      bench

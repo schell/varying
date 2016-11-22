@@ -2,15 +2,15 @@ module Main where
 
 import Control.Varying
 import Control.Applicative
+import Control.Monad (void)
 import Data.Functor.Identity
+import Data.Function (fix)
 import Data.Time.Clock
 
 -- | A simple 2d point type.
 data Point = Point { px :: Float
                    , py :: Float
                    } deriving (Show, Eq)
-
-newtype Delta = Delta { unDelta :: Float }
 
 -- An exponential tween back and forth from 0 to 50 over 1 seconds that
 -- loops forever. This spline takes float values of delta time as input,
@@ -32,12 +32,8 @@ tweeny = do
     tween_ easeOutExpo 0 50 1
     tweeny
 
--- Our time signal counts input delta time samples.
-time :: (Applicative m, Monad m) => VarT m Delta Float
-time = var unDelta
-
 -- | Our Point value that varies over time continuously in x and y.
-backAndForth :: (Applicative m, Monad m) => VarT m Delta Point
+backAndForth :: (Applicative m, Monad m) => VarT m Float Point
 backAndForth =
     -- Turn our splines into continuous output streams. We must provide
     -- a starting value since splines are not guaranteed to be defined at
@@ -47,22 +43,25 @@ backAndForth =
     in
     -- Construct a varying Point that takes time as an input.
     (Point <$> x <*> y)
-        -- Stream in a time signal using the 'plug left' combinator.
-        -- We could similarly use the 'plug right' (~>) function
-        -- and put the time signal before the construction above. This is needed
-        -- because the tween streams take time as an input.
-        <~ time
+
+-- | An example of using 'fix' and combining splines to get a better programming
+-- experience while writing tweens.
+betterBackAndForth :: (Applicative m, Monad m) => VarT m Float Point
+betterBackAndForth = flip tweenStream (Point 0 0) $ fix $ \nxt -> do
+  void $ race Point (tween_ easeOutExpo 0 50 1) (tween_ easeOutExpo 50 0 1)
+  void $ race Point (tween_ easeOutExpo 50 0 1) (tween_ easeOutExpo 0 50 1)
+  nxt
 
 main :: IO ()
-main = getCurrentTime >>= loop backAndForth
+main = getCurrentTime >>= loop betterBackAndForth
 
-loop :: Var Delta Point -> UTCTime -> IO ()
+loop :: Var Float Point -> UTCTime -> IO ()
 loop v t = do
   t1 <- getCurrentTime
   -- Here we'll run in the Identity monad using a time delta provided by
   -- getCurrentTime and diffUTCTime.
   let dt = realToFrac $ diffUTCTime t1 t
-      Identity (Point x y, vNext) = runVarT v $ Delta dt
+      Identity (Point x y, vNext) = runVarT v dt
       xStr = replicate (round x) ' ' ++ "x" ++ replicate (50 - round x) ' '
       yStr = replicate (round y) ' ' ++ "y" ++ replicate (50 - round y) ' '
       str  = zipWith f xStr yStr

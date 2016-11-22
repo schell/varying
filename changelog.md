@@ -24,3 +24,6 @@ change log
 0.6.0.0 - changed the internal type of SplineT to use Either, reducing unused
           output values and preventing time/space leaks. Updated tween types.
           Added withTween(_).
+
+1.0.0.0 - added proofs, reduced API size by removing trivial or weird (special)
+          combinators, changed some names, Event is a synonym of Maybe

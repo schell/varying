@@ -70,7 +70,6 @@ import Data.Functor.Identity
 -- and interpolation of a value. To see what these look like please check
 -- out http://www.gizma.com/easing/.
 --------------------------------------------------------------------------------
-
 -- | Ease in quadratic.
 easeInQuad :: (Num t, Fractional t, Real f) => Easing t f
 easeInQuad c t b =  c * (realToFrac $ t*t) + b
@@ -166,14 +165,7 @@ tweenStream s0 t0 = VarT $ f s0 t0 0
 
 -- | Creates a spline that produces a value interpolated between a start and
 -- end value using an easing equation ('Easing') over a duration.  The
--- resulting spline will take a time delta as input. For example:
---
--- @
--- testWhile_ isEvent (deltaUTC >>> v)
---    where v :: VarT IO a (Event Double)
---          v = flip outputStream 0 $ tween easeOutExpo 0 100 5
--- @
---
+-- resulting spline will take a time delta as input.
 -- Keep in mind `tween` must be fed time deltas, not absolute time or
 -- duration. This is mentioned because the author has made that mistake
 -- more than once ;)
@@ -225,7 +217,6 @@ withTween_ ease from to dur f = withTween ease from to dur f >> return ()
 constant :: (Applicative m, Monad m, Num t, Ord t)
          => a -> t -> TweenT t a m a
 constant value duration = pure value `untilEvent_` after duration
-
 --------------------------------------------------------------------------------
 -- $writing
 -- To create your own tweens just write a function that takes a start

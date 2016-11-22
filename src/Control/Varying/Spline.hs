@@ -4,46 +4,45 @@
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
 --
---  Using splines we can easily create continuous value streams from
---  multiple piecewise event streams. A spline is a monadic layer on top of
---  event streams which are only continuous over a certain domain. The idea
---  is that we use do notation to "run an event stream" from which we will
---  consume produced values. Once the event stream inhibits the computation
---  completes and returns a result value. That result value is then
---  used to determine the next spline in the sequence.
---
---  A spline can be converted back into a value stream using 'execSpline' or
---  'execSplineT'. This allows us to build long, complex, sequential behaviors
---  using familiar notation.
---
+--  Using splines we can easily create continuous streams from discontinuous
+--  streams. A spline is a monadic layer on top of event streams which are only
+--  continuous over a certain domain. The idea is that we use a monad to
+--  "run a stream switched by events". This means taking two streams - an output
+--  stream and an event stream, and combining them into a temporarily producing
+--  stream. Once that "stream pair" inhibits, the computation completes and
+--  returns a result value. That result value is then used to determine the next
+--  spline in the sequence.
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
-module Control.Varying.Spline (
-    -- * Spline
-    Spline,
+module Control.Varying.Spline
+  ( -- * Spline
+    Spline
     -- * Spline Transformer
-    SplineT(..),
-    -- * Running and streaming
-    scanSpline,
-    outputStream,
+  , SplineT(..)
+    -- * Creating streams from splines
+  , outputStream
+    -- * Creating splines from streams
+  , untilEvent
+  , untilEvent_
+  , _untilEvent
+  , _untilEvent_
+    -- * Other runners
+  , scanSpline
     -- * Combinators
-    step,
-    fromEvent,
-    untilEvent,
-    untilEvent_,
-    _untilEvent,
-    _untilEvent_,
-    race,
-    raceMany,
-    merge,
-    capture,
-    mapOutput,
-    adjustInput,
-) where
+  , step
+  , race
+  , raceAny
+  , merge
+  , capture
+  , mapOutput
+  , adjustInput
+    -- * Helpers for debugging
+  , fromEvent
+  ) where
 
 import Control.Varying.Core
 import Control.Varying.Event
@@ -56,13 +55,15 @@ import Data.Function
 import Data.Monoid
 
 -- | 'SplineT' shares all the types of 'VarT' and adds a result value. Its
--- monad, input and output types (@m@, @a@ and @b@, respectively) reflect the
--- underlying 'VarT`. A spline adds a result type which represents the monadic
--- computation's result value.
--- Much like the State monad it has an "internal state" and an eventual
--- result value, where the internal state is the output value. The result
--- value is used only in determining the next spline to sequence.
---newtype SplineT a b m c = SplineT { unSplineT :: VarT m a (Either b c) }
+-- monad, input and output types (@m@, @a@ and @b@, respectively) represent the
+-- same parameters in 'VarT`. A spline adds a result type which represents the
+-- monadic computation's result value.
+-- A spline either concludes in a result or it produces an output value and
+-- another spline. This makes it a stream that eventually ends. We can use this
+-- to set up our streams in a monadic fasion, where the end result of one spline
+-- can be used to determin the next spline to run. Using 'outputStream' we can
+-- then fuse these piecewise continuous (but otherwise discontinuous) streams
+-- into one continuous stream of type 'VarT m a b'.
 newtype SplineT a b m c = SplineT { runSplineT :: a -> m (Either c (b, SplineT a b m c)) }
 
 -- | A spline is a functor by applying the function to the result of the
@@ -93,7 +94,6 @@ instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
     x <- sx
     return $ f x
 
--- #if MIN_VERSION_base(4,8,0)
 -- | A spline is a transformer by using @effect@.
 instance MonadTrans (SplineT a b) where
   lift f = SplineT $ const $ f >>= return . Left
@@ -108,7 +108,9 @@ instance (Applicative m, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
 -- output of type @b@ and a result value of type @c@.
 type Spline a b c = SplineT a b Identity c
 
--- | Evaluates a spline into a value stream of its output type.
+-- | Permute a spline into one continuous stream. Since a spline is not
+-- guaranteed to be defined over any domain (specifically on its edges), this
+-- function takes a default value to use as the "last known value".
 outputStream :: (Applicative m, Monad m)
              => SplineT a b m c -> b -> VarT m a b
 outputStream (SplineT s0) b0 = VarT $ f s0 b0
@@ -128,41 +130,34 @@ fromEvent :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a (Event 
 fromEvent ve = SplineT $ \a -> do
   (e, ve1) <- runVarT ve a
   return $ case e of
-    Event b -> Left b
-    NoEvent -> Right (NoEvent, fromEvent ve1)
+    Just b -> Left b
+    Nothing -> Right (Nothing, fromEvent ve1)
 
--- | Create a spline from a value stream and an event stream. The spline
--- uses the value stream as its output value. The spline will run until
--- the event stream produces a value, at that point the last output
--- value and the event value are tupled and returned as the spline's result
--- value.
+-- | Create a spline from a stream and an event stream. The spline
+-- uses the stream as its output value. The spline will run until
+-- the event stream produces an event, at that point the last known output
+-- value and the event value are tupled and returned as the spline's result.
 untilEvent :: (Applicative m, Monad m)
-           => VarT m a b -> VarT m a (Event c)
-           -> SplineT a b m (b,c)
+           => VarT m a b -> VarT m a (Event c) -> SplineT a b m (b,c)
 untilEvent v ve = SplineT $ f ((,) <$> v <*> ve)
   where f vve a = do t <-runVarT vve a
                      return $ case t of
-                       ((b, NoEvent), vve1) -> Right (b, SplineT $ f vve1)
-                       ((b, Event c),    _) -> Left (b, c)
+                       ((b, Nothing), vve1) -> Right (b, SplineT $ f vve1)
+                       ((b, Just c),    _) -> Left (b, c)
 
--- | A variant of 'untilEvent' that only results in the left result,
--- discarding the right result.
+-- | A variant of 'untilEvent' that results in the last known output value.
 untilEvent_ :: (Applicative m, Monad m)
-            => VarT m a b -> VarT m a (Event c)
-            -> SplineT a b m b
+            => VarT m a b -> VarT m a (Event c) -> SplineT a b m b
 untilEvent_ v ve = fst <$> untilEvent v ve
 
--- | A variant of 'untilEvent' that only results in the right result,
--- discarding the left result.
+-- | A variant of 'untilEvent' that results in the event steam's event value.
 _untilEvent :: (Applicative m, Monad m)
-            => VarT m a b -> VarT m a (Event c)
-            -> SplineT a b m c
+            => VarT m a b -> VarT m a (Event c) -> SplineT a b m c
 _untilEvent v ve = snd <$> untilEvent v ve
 
----- | A variant of 'untilEvent' that discards both the right and left results.
+-- | A variant of 'untilEvent' that discards both the output and event values.
 _untilEvent_ :: (Applicative m, Monad m)
-             => VarT m a b -> VarT m a (Event c)
-             -> SplineT a b m ()
+             => VarT m a b -> VarT m a (Event c) -> SplineT a b m ()
 _untilEvent_ v ve = void $ _untilEvent v ve
 
 -- | Run two splines in parallel, combining their output. Return the result of
@@ -178,10 +173,13 @@ race f sa0 sb0 = SplineT (g sa0 sb0)
             Left e -> return $ Left $ Right e
             Right (b, sb1) -> return $ Right (f a b, SplineT $ g sa1 sb1)
 
-raceMany :: (Applicative m, Monad m, Monoid b)
+-- | Run many splines in parallel, combining their output with 'mappend'.
+-- Returns the result of the spline that concludes first. If any conclude at the
+-- same time the leftmost result will be returned.
+raceAny :: (Applicative m, Monad m, Monoid b)
          => [SplineT a b m c] -> SplineT a b m c
-raceMany [] = pure mempty `_untilEvent` never
-raceMany ss = SplineT $ f [] (map runSplineT ss) mempty
+raceAny [] = pure mempty `_untilEvent` never
+raceAny ss = SplineT $ f [] (map runSplineT ss) mempty
   where f ys []     b _    = return $ Right (b, SplineT $ f [] ys mempty)
         f ys (v:vs) b a = v a >>= \case
           Left c -> return $ Left c
@@ -214,7 +212,7 @@ merge apnd s1 s2 = SplineT $ f s1 s2
 -- spline's result. This is helpful when you want to sample the last
 -- output value in order to determine the next spline to sequence.
 capture :: (Applicative m, Monad m)
-        => SplineT a b m c -> SplineT a b m (Maybe b, c)
+        => SplineT a b m c -> SplineT a b m (Event b, c)
 capture = SplineT . f Nothing
     where f mb s a = runSplineT s a >>= \case
             Left c -> return $ Left (mb, c)

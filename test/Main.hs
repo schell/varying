@@ -14,26 +14,26 @@ main :: IO ()
 main = hspec $ do
   describe "before" $ do
     it "should produce events before a given step" $ do
-      let varEv :: Var () (Event Int)
+      let varEv :: Var () (Maybe Int)
           varEv = 1 ~> before 3
           scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
-      scans `shouldBe` [Event 1, Event 2, NoEvent, NoEvent]
+      scans `shouldBe` [Just 1, Just 2, Nothing, Nothing]
 
   describe "after" $ do
     it "should produce events after a given step" $ do
-      let varEv :: Var () (Event Int)
+      let varEv :: Var () (Maybe Int)
           varEv = 1 ~> after 3
           scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
-      scans `shouldBe` [NoEvent, NoEvent, Event 3, Event 4]
+      scans `shouldBe` [Nothing, Nothing, Just 3, Just 4]
   describe "anyE" $ do
     it "should produce on any event" $ do
-      let v1,v2,v3 :: Var () (Event Int)
+      let v1,v2,v3 :: Var () (Maybe Int)
           v1 = use 1 ((1 :: Var () Int) ~> before 2)
           v2 = use 2 ((1 :: Var () Int) ~> after 3)
           v3 = always 3
           v = anyE [v1,v2,v3]
           scans = fst $ runIdentity $ scanVar v $ replicate 4 ()
-      scans `shouldBe` [Event 1, Event 3, Event 2, Event 2]
+      scans `shouldBe` [Just 1, Just 3, Just 2, Just 2]
   describe "tween/tweenWith" $ do
       it "should step by the dt passed in" $ do
         let mytween :: Tween Double Double ()
@@ -68,16 +68,16 @@ main = hspec $ do
 
   describe "fromEvent" $ do
     let s = do
-          str <- fromEvent (var f ~> onJust)
-          step $ Event str
-          step $ Event "done"
+          str <- fromEvent $ var f
+          step $ Just str
+          step $ Just "done"
         f :: Int -> Maybe String
         f 0 = Nothing
         f 1 = Just "YES"
         f x = Just $ show x
-        Identity scans = scanSpline s NoEvent [0,0,0,1,0]
-    it "should produce NoEvent until it procs" $
-      scans `shouldBe` [NoEvent,NoEvent,NoEvent,Event "YES",Event "done"]
+        Identity scans = scanSpline s Nothing [0,0,0,1,0]
+    it "should produce Nothing until it procs" $
+      scans `shouldBe` [Nothing,Nothing,Nothing,Just "YES",Just "done"]
 
   describe "lift/liftIO" $ do
     let s :: SplineT () String IO ()
