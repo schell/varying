@@ -1,0 +1,21 @@
+#- patterns:
+#  - .*\.hs$
+#  - .*\.cabal$
+#  commands:
+#  - stack test --trace --fast --ghc-options="-fprof-cafs -fprof-auto"
+##  - stack exec varying-example -- +RTS -p -hc -sstderr
+##  - ./pack-profiling.sh
+#  - hlint \0
+
+# These are for preparing for a stackage release
+- patterns:
+  - .*\.l?hs$
+  - .*\.cabal
+  - .*stack\.yaml$
+  commands:
+  #- stack --resolver lts-1   --install-ghc test --fast # for ghc 7.6
+  #- stack --resolver lts-2   --install-ghc test --fast # for ghc 7.8
+  #- stack --resolver lts-3   --install-ghc test --fast # for ghc 7.10.2
+  #- stack --resolver lts-5   --install-ghc test --fast # for ghc 7.10.3
+  #- stack --resolver nightly --install-ghc test --fast
+  - stack build --fast --stack-yaml=stack80-ghcjs.yaml
