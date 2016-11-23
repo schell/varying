@@ -1,13 +1,4 @@
-#- patterns:
-#  - .*\.hs$
-#  - .*\.cabal$
-#  commands:
-#  - stack test --trace --fast --ghc-options="-fprof-cafs -fprof-auto"
-##  - stack exec varying-example -- +RTS -p -hc -sstderr
-##  - ./pack-profiling.sh
-#  - hlint \0
-
-# These are for preparing for a stackage release
+## These are for preparing for a stackage release
 - patterns:
   - .*\.l?hs$
   - .*\.cabal

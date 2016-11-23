@@ -4,7 +4,7 @@
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <efsubenovex@gmail.com>
 --
 --   Varying values represent values that change over a given domain.
 --
@@ -70,7 +70,7 @@ type Var a b = VarT Identity a b
 newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
                   -- ^ Given an input value, return a computation that
                   -- effectfully produces an output value and a new stream.
- --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- Typeclass instances
 --------------------------------------------------------------------------------
 -- | You can transform the output value of any stream:

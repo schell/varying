@@ -18,7 +18,10 @@
 --  is running.  For more info on switching and sequencing streams with events
 --  please check out 'Control.Varying.Spline', which lets you chain together
 --  sequences of values and events using a familiar do-notation.
-
+{-# LANGUAGE CPP #-}
+#if __GLASGOW_HASKELL__ >= 710
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+#endif
 module Control.Varying.Event
   ( -- * Event constructors (synonyms of Maybe)
     Event
@@ -50,10 +53,14 @@ module Control.Varying.Event
 
 import Prelude hiding (until)
 import Control.Varying.Core
-import Control.Applicative
 import Control.Monad
-import Data.Monoid
 import Data.Foldable (foldl')
+
+-- stuff for FAMP
+#if __GLASGOW_HASKELL__ <= 707
+import Control.Applicative
+import Data.Function
+#endif
 
 type Event = Maybe
 
@@ -174,7 +181,7 @@ anyE vs = VarT $ \a -> do
 --------------------------------------------------------------------------------
 -- Primitive event streams
 --------------------------------------------------------------------------------
--- | Produce the given value once and then inhibit forever.
+-- | Produce the given event value once and then inhibit forever.
 once :: (Applicative m, Monad m) => b -> VarT m a (Event b)
 once b = VarT $ \_ -> return (Just b, never)
 
@@ -196,8 +203,8 @@ always = pure . Just
 --------------------------------------------------------------------------------
 -- Bubbling
 --------------------------------------------------------------------------------
--- | Produce events of a value stream @v@ only when an event stream @h@
--- produces an event.
+-- | Produce events of a stream @v@ only when an event stream @h@ produces an
+-- event.
 -- @v@ and @h@ maintain state while cold.
 onlyWhenE :: (Applicative m, Monad m)
           => VarT m a b -- ^ @v@ - The value stream
