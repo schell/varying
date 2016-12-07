@@ -19,7 +19,7 @@
 --  please check out 'Control.Varying.Spline', which lets you chain together
 --  sequences of values and events using a familiar do-notation.
 {-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 710
+#if __GLASGOW_HASKELL__ >= 800 
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
 #endif
 module Control.Varying.Event

@@ -34,4 +34,4 @@ import Control.Varying.Core
 import Control.Varying.Event
 import Control.Varying.Tween
 import Control.Varying.Time
-import Control.Varying.Spline
+import Control.Varying.Spline 

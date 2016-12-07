@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
@@ -50,9 +51,11 @@ import Control.Category
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Applicative
-import Data.Monoid
 import Data.Functor.Identity
 import Debug.Trace
+#if __GLASGOW_HASKELL__ <= 709
+import Data.Monoid
+#endif
 --------------------------------------------------------------------------------
 -- Core datatypes
 --------------------------------------------------------------------------------
@@ -382,7 +385,8 @@ vftrace f = var $ \b -> trace (f b) b
 
 -- | Run a stream in IO over some input, printing the output each step. This is
 -- the function we've been using throughout this documentation.
-testVarOver :: (MonadIO m, Show b) => VarT m a b -> [a] -> m ()
+testVarOver :: (Applicative m, Monad m, MonadIO m, Show b)
+            => VarT m a b -> [a] -> m ()
 testVarOver v xs = fst <$> scanVar v xs >>= mapM_ (liftIO . print)
 --------------------------------------------------------------------------------
 -- $proofs
