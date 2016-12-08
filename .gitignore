@@ -20,3 +20,5 @@ cabal.sandbox.config
 *.aux
 *.prof
 TAGS
+*.js
+*.css
