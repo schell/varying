@@ -85,7 +85,7 @@ newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
 -- 9
 instance (Applicative m, Monad m) => Functor (VarT m b) where
   fmap f v = (var f) . v
--- | A very simple category instance.
+-- | A very simple category instance. 
 --
 -- @
 --   id = var id
