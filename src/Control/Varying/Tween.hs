@@ -14,7 +14,6 @@
 --   arbitrary types, and possibly tween one type into another (pipe
 --   dreams).
 
---
 {-# LANGUAGE Rank2Types   #-}
 module Control.Varying.Tween
   ( -- * Tweening types
@@ -55,10 +54,7 @@ module Control.Varying.Tween
 import Control.Varying.Core
 import Control.Varying.Event
 import Control.Varying.Spline
-import Control.Arrow
-import Control.Applicative
 import Control.Monad.Trans.State
-import Control.Monad.Trans.Class
 import Data.Functor.Identity
 
 --------------------------------------------------------------------------------
@@ -69,27 +65,27 @@ import Data.Functor.Identity
 -- out http://www.gizma.com/easing/.
 --------------------------------------------------------------------------------
 -- | Ease in quadratic.
-easeInQuad :: (Num t, Fractional t, Real f) => Easing t f
+easeInQuad :: (Fractional t, Real f) => Easing t f
 easeInQuad c t b =  c * realToFrac (t*t) + b
 
 -- | Ease out quadratic.
-easeOutQuad :: (Num t, Fractional t, Real f) => Easing t f
+easeOutQuad :: (Fractional t, Real f) => Easing t f
 easeOutQuad c t b =  (-c) * realToFrac (t * (t - 2)) + b
 
 -- | Ease in cubic.
-easeInCubic :: (Num t, Fractional t, Real f) => Easing t f
+easeInCubic :: (Fractional t, Real f) => Easing t f
 easeInCubic c t b =  c * realToFrac (t*t*t) + b
 
 -- | Ease out cubic.
-easeOutCubic :: (Num t, Fractional t, Real f) => Easing t f
+easeOutCubic :: (Fractional t, Real f) => Easing t f
 easeOutCubic c t b =  let t' = realToFrac t - 1 in c * (t'*t'*t' + 1) + b
 
 -- | Ease in by some power.
-easeInPow :: (Num t, Fractional t, Real f) => Int -> Easing t f
+easeInPow :: (Fractional t, Real f) => Int -> Easing t f
 easeInPow power c t b =  c * (realToFrac t^power) + b
 
 -- | Ease out by some power.
-easeOutPow :: (Num t, Fractional t, Real f) => Int -> Easing t f
+easeOutPow :: (Fractional t, Real f) => Int -> Easing t f
 easeOutPow power c t b =
     let t' = realToFrac t - 1
         c' = if power `mod` 2 == 1 then c else -c

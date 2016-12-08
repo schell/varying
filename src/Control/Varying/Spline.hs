@@ -57,7 +57,7 @@ import Data.Functor.Identity
 import Data.Monoid
 
 -- stuff for FAMP
-#if __GLASGOW_HASKELL__ <= 707
+#if __GLASGOW_HASKELL__ < 709
 import Control.Applicative
 import Data.Function
 #endif

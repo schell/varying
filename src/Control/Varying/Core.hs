@@ -54,10 +54,10 @@ import Control.Arrow
 import Control.Category
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Applicative 
 import Data.Functor.Identity
 import Debug.Trace
-#if __GLASGOW_HASKELL__ <= 709
+import Control.Applicative 
+#if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
 #endif
 --------------------------------------------------------------------------------
