@@ -1,8 +1,8 @@
 -- |
 --   Module:     Control.Varying.Tween
---   Copyright:  (c) 2015 Schell Scivally
+--   Copyright:  (c) 2016 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <efsubenovex@gmail.com>
 --
 --   Tweening is a technique of generating intermediate samples of a type
 --   __between__ a start and end value. By sampling a running tween
@@ -16,7 +16,6 @@
 
 --
 {-# LANGUAGE Rank2Types   #-}
-{-# LANGUAGE BangPatterns #-}
 module Control.Varying.Tween
   ( -- * Tweening types
     Easing
@@ -56,7 +55,6 @@ module Control.Varying.Tween
 import Control.Varying.Core
 import Control.Varying.Event
 import Control.Varying.Spline
-import Control.Varying.Time
 import Control.Arrow
 import Control.Applicative
 import Control.Monad.Trans.State
@@ -72,15 +70,15 @@ import Data.Functor.Identity
 --------------------------------------------------------------------------------
 -- | Ease in quadratic.
 easeInQuad :: (Num t, Fractional t, Real f) => Easing t f
-easeInQuad c t b =  c * (realToFrac $ t*t) + b
+easeInQuad c t b =  c * realToFrac (t*t) + b
 
 -- | Ease out quadratic.
 easeOutQuad :: (Num t, Fractional t, Real f) => Easing t f
-easeOutQuad c t b =  (-c) * (realToFrac $ t * (t - 2)) + b
+easeOutQuad c t b =  (-c) * realToFrac (t * (t - 2)) + b
 
 -- | Ease in cubic.
 easeInCubic :: (Num t, Fractional t, Real f) => Easing t f
-easeInCubic c t b =  c * (realToFrac $ t*t*t) + b
+easeInCubic c t b =  c * realToFrac (t*t*t) + b
 
 -- | Ease out cubic.
 easeOutCubic :: (Num t, Fractional t, Real f) => Easing t f
@@ -138,7 +136,7 @@ type TweenT f t m = SplineT f t (StateT f m)
 type Tween f t = TweenT f t Identity
 
 runTweenT :: (Monad m, Num f)
-          => TweenT f t m x -> f -> f -> m (Either x ((t, TweenT f t m x)), f)
+          => TweenT f t m x -> f -> f -> m (Either x (t, TweenT f t m x), f)
 runTweenT s dt = runStateT (runSplineT s dt)
 
 scanTween :: (Functor m, Applicative m, Monad m, Num f)

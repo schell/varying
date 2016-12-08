@@ -19,3 +19,4 @@ cabal.sandbox.config
 *.ps
 *.aux
 *.prof
+TAGS
