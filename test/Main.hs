@@ -66,9 +66,9 @@ main = hspec $ do
       it "should produce output exactly one time per call" $
         concat scans `shouldBe` "hey, there..."
 
-  describe "fromEvent" $ do
+  describe "untilProc" $ do
     let s = do
-          str <- fromEvent $ var f
+          str <- untilProc $ var f
           step $ Just str
           step $ Just "done"
         f :: Int -> Maybe String
@@ -108,8 +108,9 @@ main = hspec $ do
       it "should step twice and left should win" $
         unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
 
-  describe "raceMany" $ do
-    let s1 = do step "t"
+  describe "raceAny" $ do
+    let s1 :: Spline () String Int
+        s1 = do step "t"
                 step "c"
                 return 0
         s2 = do step "h"
@@ -117,8 +118,8 @@ main = hspec $ do
                 return 1
         s3 = do step "e"
                 step "t"
-                return (2 :: Int)
-        s = do x <- raceMany [s1,s2,s3]
+                return 2 
+        s = do x <- raceAny [s1,s2,s3]
                step $ show x
         Identity scans = scanSpline s "" $ replicate 3 ()
     it "should output in parallel (mappend) and return the first or leftmost result" $ unwords scans `shouldBe` "the cat 0"
