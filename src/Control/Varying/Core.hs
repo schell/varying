@@ -1,6 +1,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
+
+#if __GLASGOW_HASKELL__ > 710 
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+#endif
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally

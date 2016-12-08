@@ -1,14 +1,21 @@
+{-# LANGUAGE CPP #-}
+
+#if __GLASGOW_HASKELL__ > 710 
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+#endif
+
 module Main where
 
+
 import Test.Hspec hiding (after, before)
-import Control.Applicative
 import Control.Varying
-import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State
-import Control.Monad (when)
 import Data.Functor.Identity
 import Data.Time.Clock
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 
 main :: IO ()
 main = hspec $ do
@@ -128,7 +135,7 @@ main = hspec $ do
       let r :: Spline () String ()
           r = do x <- capture $ do step "a"
                                    step "b"
-                                   return 2
+                                   return (2 :: Int)
                  case x of
                    (Just "b", 2) -> step "True"
                    _ -> step "False"
@@ -183,8 +190,8 @@ main = hspec $ do
     let f = (+1)
         x = 1
     it "(homomorphism) pure f <*> pure x = pure (f x)" $
-      (fst $ runIdentity $ scanVar (pure f <*> pure x) [0..5])
-      `shouldBe` (fst $ runIdentity $ scanVar (pure $ f x) [0..5])
+      fst (runIdentity $ scanVar (pure f <*> pure x) [0..5])
+      `shouldBe` fst (runIdentity $ scanVar (pure $ f x) [0..5])
 
   describe "spline's applicative instance" $ do
     let ident = pure id <*> sinc

@@ -59,7 +59,7 @@ import Control.Monad
 import Data.Foldable (foldl')
 
 -- stuff for FAMP
-#if __GLASGOW_HASKELL__ <= 707
+#if __GLASGOW_HASKELL__ < 709
 import Control.Applicative
 import Data.Function
 #endif
