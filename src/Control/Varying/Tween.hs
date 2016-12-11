@@ -55,6 +55,7 @@ import Control.Varying.Core
 import Control.Varying.Event
 import Control.Varying.Spline
 import Control.Monad.Trans.State
+import Control.Applicative
 import Data.Functor.Identity
 
 --------------------------------------------------------------------------------
