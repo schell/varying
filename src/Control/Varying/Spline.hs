@@ -141,7 +141,7 @@ instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
 -- "Hello"
 -- 2
 instance MonadTrans (SplineT a b) where
-  lift f = SplineT $ const $ fmap Left f
+  lift f = SplineT $ const $ f >>= return . Left
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value.
