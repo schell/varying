@@ -35,7 +35,7 @@ tweenx = do
     -- Loop forever
     tweenx
 
--- A quadratic tween back and forth from 0 to 50 over 1 seconds that never
+-- An exponential tween back and forth from 0 to 50 over 1 seconds that never
 -- ends.
 tweeny :: (Applicative m, Monad m) => TweenT Float Float m Float
 tweeny = do
