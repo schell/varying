@@ -1,8 +1,10 @@
+{-# LANGUAGE LambdaCase   #-}
+{-# LANGUAGE BangPatterns   #-}
 -- |
 --   Module:     Control.Varying.Event
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <schell@takt.com>
 --
 --  An event stream is simply a stream of @Maybe a@. This kind of stream is
 --  considered to be only defined at those occurances of @Just a@. Events
@@ -43,17 +45,17 @@ module Control.Varying.Event
   , once
   , always
   , never
+    -- * Switching
+  , switch
     -- * Bubbling
   , onlyWhen
   , onlyWhenE
   ) where
 
-import Prelude hiding (until)
-import Control.Varying.Core
-import Control.Applicative
-import Control.Monad
-import Data.Monoid
-import Data.Foldable (foldl')
+import           Control.Monad
+import           Control.Varying.Core
+import           Data.Foldable        (foldl')
+import           Prelude              hiding (until)
 
 type Event = Maybe
 
@@ -116,6 +118,7 @@ foldStream f acc = VarT $ \e ->
                  in return (acc', foldStream f acc')
       Nothing -> return (acc, foldStream f acc)
 
+
 -- | Produces the given value until the input events produce a value, then
 -- produce that value until a new input event produces. This always holds
 -- the last produced value, starting with the given value.
@@ -123,8 +126,21 @@ foldStream f acc = VarT $ \e ->
 -- @
 -- time '>>>' 'Control.Varying.Time.after' 3 '>>>' 'startingWith' 0
 -- @
-startWith, startingWith :: (Applicative m, Monad m) => a -> VarT m (Event a) a
-startWith = foldStream (\_ a -> a)
+--
+-- >>> :{
+-- let v = onWhen (== 3) >>> startingWith 0
+-- in testVarOver v [0, 1, 2, 3, 4]
+-- >>> :}
+-- 0
+-- 0
+-- 0
+-- 3
+-- 3
+startWith, startingWith
+  :: (Applicative m, Monad m)
+  => a
+  -> VarT m (Event a) a
+startWith    = foldStream (\_ a -> a)
 startingWith = startWith
 
 -- | Stream through some number of successful 'Event's and then inhibit
@@ -193,6 +209,48 @@ never = pure Nothing
 -- @
 always :: (Applicative m, Monad m) => b -> VarT m a (Event b)
 always = pure . Just
+
+--------------------------------------------------------------------------------
+-- Switching
+--------------------------------------------------------------------------------
+-- | Higher-order switching.
+-- Use an event stream of value streams and produces event values of the latest
+-- produced value stream. Switches to a new value stream each time one is
+-- produced. The currently used value stream maintains local state until the
+-- outer event stream produces a new value stream.
+--
+-- In this example we're sequencing the value streams we'd like to use and then
+-- switching them when the outer event stream fires.
+--
+-- >>> import Control.Varying.Spline
+-- >>> :{
+-- let v :: VarT IO () (Event Int)
+--     v = switch $ flip outputStream Nothing $ do
+--           step $ Just $ 1 >>> accumulate (+) 0
+--           step Nothing
+--           step Nothing
+--           step $ Just 5
+--           step Nothing
+-- in testVarOver v [(), (), (), (), ()] -- testing over five frames
+-- >>> :}
+-- Just 1
+-- Just 2
+-- Just 3
+-- Just 5
+-- Just 5
+switch
+  :: (Applicative m, Monad m)
+  => VarT m a (Event (VarT m a b))
+  -> VarT m a (Event b)
+switch = switchGo $ pure Nothing
+  where switchGo vInner v = VarT $ \a -> runVarT v a >>= \case
+          (Nothing, vOuter) -> do
+            (mayB, vInner1) <- runVarT vInner a
+            return (mayB, switchGo vInner1 vOuter)
+          (Just vInner2, vOuter) -> do
+            (mayB, vInner3) <- runVarT (Just <$> vInner2) a
+            return (mayB, switchGo vInner3 vOuter)
+
 --------------------------------------------------------------------------------
 -- Bubbling
 --------------------------------------------------------------------------------

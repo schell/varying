@@ -2,7 +2,7 @@
 --  Module:     Control.Varying
 --  Copyright:  (c) 2015 Schell Scivally
 --  License:    MIT
---  Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--  Maintainer: Schell Scivally <schell@takt.com>
 --
 --  [@Core@]
 --  Get started writing value streams using the pure constructor 'var', the
@@ -22,16 +22,12 @@
 --  Create time streams and temporal event streams.
 --
 module Control.Varying (
-    -- * Reexports
-    module Control.Varying.Core,
-    module Control.Varying.Event,
-    module Control.Varying.Spline,
-    module Control.Varying.Time,
-    module Control.Varying.Tween,
+  -- * Reexports
+  module V
 ) where
 
-import Control.Varying.Core
-import Control.Varying.Event
-import Control.Varying.Tween
-import Control.Varying.Time
-import Control.Varying.Spline
+import           Control.Varying.Core   as V
+import           Control.Varying.Event  as V
+import           Control.Varying.Spline as V
+import           Control.Varying.Time   as V
+import           Control.Varying.Tween  as V

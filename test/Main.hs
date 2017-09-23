@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
 
 import Test.Hspec hiding (after, before)
@@ -12,24 +13,24 @@ import Data.Time.Clock
 
 main :: IO ()
 main = hspec $ do
-  describe "before" $ do
+  describe "before" $
     it "should produce events before a given step" $ do
       let varEv :: Var () (Maybe Int)
-          varEv = 1 ~> before 3
+          varEv = 1 >>> before 3
           scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
       scans `shouldBe` [Just 1, Just 2, Nothing, Nothing]
 
-  describe "after" $ do
+  describe "after" $
     it "should produce events after a given step" $ do
       let varEv :: Var () (Maybe Int)
-          varEv = 1 ~> after 3
+          varEv = 1 >>> after 3
           scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
       scans `shouldBe` [Nothing, Nothing, Just 3, Just 4]
-  describe "anyE" $ do
+  describe "anyE" $
     it "should produce on any event" $ do
       let v1,v2,v3 :: Var () (Maybe Int)
-          v1 = use 1 ((1 :: Var () Int) ~> before 2)
-          v2 = use 2 ((1 :: Var () Int) ~> after 3)
+          v1 = use 1 ((1 :: Var () Int) >>> before 2)
+          v2 = use 2 ((1 :: Var () Int) >>> after 3)
           v3 = always 3
           v = anyE [v1,v2,v3]
           scans = fst $ runIdentity $ scanVar v $ replicate 4 ()
@@ -49,7 +50,7 @@ main = hspec $ do
 
   describe "untilEvent" $ do
       let Identity scans = scanSpline (3 `untilEvent` ((1 :: Var () Int)
-                                                          ~> after 10))
+                                                          >>> after 10))
                                       0
                                       (replicate 10 ())
       it "should produce output from the value stream until event procs" $
@@ -108,8 +109,9 @@ main = hspec $ do
       it "should step twice and left should win" $
         unwords scans `shouldBe` "start s10:s20 s11:s21 right won with True"
 
-  describe "raceMany" $ do
-    let s1 = do step "t"
+  describe "raceAny" $ do
+    let s1 :: Spline () String Int
+        s1 = do step "t"
                 step "c"
                 return 0
         s2 = do step "h"
@@ -118,7 +120,7 @@ main = hspec $ do
         s3 = do step "e"
                 step "t"
                 return (2 :: Int)
-        s = do x <- raceMany [s1,s2,s3]
+        s = do x <- raceAny [s1,s2,s3]
                step $ show x
         Identity scans = scanSpline s "" $ replicate 3 ()
     it "should output in parallel (mappend) and return the first or leftmost result" $ unwords scans `shouldBe` "the cat 0"
@@ -160,9 +162,9 @@ main = hspec $ do
 -- Adherance to typeclass laws
 --------------------------------------------------------------------------------
   -- Spline helpers
-  let inc = 1 ~> accumulate (+) 0
+  let inc = 1 >>> accumulate (+) 0
       sinc :: Spline a Int (Int, Int)
-      sinc = inc `untilEvent` (1 ~> after 3)
+      sinc = inc `untilEvent` (1 >>> after 3)
       go a = runIdentity (scanSpline a 0 [0..9])
       equal a b = go a `shouldBe` go b
 
@@ -193,13 +195,13 @@ main = hspec $ do
         pfx = pure (1+1)
     it "(homomorphism) pure f <*> pure x = pure (f x)" $ equal pfpx pfx
     let u :: Spline a Int (Int -> Int)
-        u = pure 66 `_untilEvent` (use (+1) $ 1 ~> after (3 :: Int))
+        u = pure 66 `_untilEvent` (use (+1) $ 1 >>> after (3 :: Int))
         upy = u <*> pure 1
         pyu = pure ($ 1) <*> u
     it "(interchange) u <*> pure y = pure ($ y) <*> u" $ equal upy pyu
     let v :: Spline a Int (Int -> Int)
-        v = pure 66 `_untilEvent` (use (1-) $ 1 ~> after (4 :: Float))
-        w = pure 72 `_untilEvent` (use 3 $ 1 ~> after (1 :: Float))
+        v = pure 66 `_untilEvent` (use (1-) $ 1 >>> after (4 :: Float))
+        w = pure 72 `_untilEvent` (use 3 $ 1 >>> after (1 :: Float))
         pduvw = pure (.) <*> u <*> v <*> w
         uvw = u <*> (v <*> w)
     it "(compisition) pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $

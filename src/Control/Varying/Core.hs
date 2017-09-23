@@ -1,41 +1,42 @@
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <schell@takt.com>
 --
 --   Varying values represent values that change over a given domain.
 --
---   A stream/signal takes some input know as the domain (e.g. time, place, etc)
---   and when sampled using 'runVarT' - produces a value and a new stream. This
---   pattern is known as an automaton. `varying` uses this pattern as its base
---   type with the additon of a monadic computation to create locally stateful
---   signals that change over some domain.
+--   A varying value takes some input as its domain (e.g. time, place, etc)
+--   and when run using 'runVarT' it produces a value and a new varying value.
+--   This pattern is known as an automaton and `varying` uses this pattern at its
+--   core. With the additon of monadic event sequencing, 'varying' makes it easy
+--   to construct complicated signals that control program and data flow.
 module Control.Varying.Core
   ( -- * Types and Typeclasses
     Var
   , VarT(..)
-    -- * Creating streams
+    -- * Creating vars
     -- $creation
   , done
   , var
   , arr
   , varM
   , mkState
-    -- * Composing streams
+    -- * Composing vars
     -- $composition
   , (<<<)
   , (>>>)
     -- * Adjusting and accumulating
   , delay
   , accumulate
-    -- * Sampling streams (running and other entry points)
+    -- * Sampling vars (running and other entry points)
     -- $running
   , scanVar
   , stepMany
-    -- * Debugging and tracing streams in flight
+    -- * Debugging and tracing vars in flight
   , vtrace
   , vstrace
   , vftrace
@@ -44,44 +45,48 @@ module Control.Varying.Core
     -- $proofs
   ) where
 
-import Prelude hiding (id, (.))
-import Control.Arrow
-import Control.Category
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.Applicative
-import Data.Monoid
-import Data.Functor.Identity
-import Debug.Trace
+import           Control.Applicative
+import           Control.Arrow
+import           Control.Category
+import           Control.Monad
+import           Control.Monad.Fix
+import           Control.Monad.IO.Class
+import           Data.Functor.Contravariant
+import           Data.Functor.Identity
+import           Data.Monoid
+import           Debug.Trace
+import           Prelude                    hiding (id, (.))
 --------------------------------------------------------------------------------
 -- Core datatypes
 --------------------------------------------------------------------------------
--- | A stream parameterized with Identity that takes input of type @a@
+-- | A continuously varying value, with effects.
+-- It's a kind of <https://en.wikipedia.org/wiki/Mealy_machine Mealy machine>
+-- (an automaton).
+newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
+                            -- ^ Run a @VarT@ computation with an input value of
+                            -- type 'a', yielding a step - a value of type 'b'
+                            -- and a new computation for yielding the next step.
+
+
+-- | A var parameterized with Identity that takes input of type @a@
 -- and gives output of type @b@. This is the pure, effect-free version of
 -- 'VarT'.
 type Var a b = VarT Identity a b
 
--- | A stream is a structure that contains a value that changes over some
--- input. It's a kind of
--- <https://en.wikipedia.org/wiki/Mealy_machine Mealy machine> (an automaton)
--- with effects. Using 'runVarT' with an input value of type 'a' yields a
--- "step", which is a value of type 'b' and a new stream for yielding the next
--- value.
-newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
-                  -- ^ Given an input value, return a computation that
-                  -- effectfully produces an output value and a new stream.
- --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- Typeclass instances
 --------------------------------------------------------------------------------
--- | You can transform the output value of any stream:
+-- | You can transform the output value of any var:
 --
 -- >>> let v = 1 >>> fmap (*3) (accumulate (+) 0)
 -- >>> testVarOver v [(),(),()]
 -- 3
 -- 6
 -- 9
-instance (Applicative m, Monad m) => Functor (VarT m b) where
-  fmap f v = (var f) . v
+instance Applicative m => Functor (VarT m b) where
+  fmap f v = VarT $ (g <$>) . runVarT v
+    where g (b, vb) = (f b, f <$> vb)
+
 -- | A very simple category instance.
 --
 -- @
@@ -97,28 +102,27 @@ instance (Applicative m, Monad m) => Functor (VarT m b) where
 -- 1
 -- 2
 -- 3
-instance (Applicative m, Monad m) => Category (VarT m) where
+instance Monad m => Category (VarT m) where
     id = var id
-    f0 . g0 = VarT $ \(!a) -> do
+    f0 . g0 = VarT $ \a -> do
       (b, g) <- runVarT g0 a
       (c, f) <- runVarT f0 b
       return (c, f . g)
 
--- | Streams are applicative.
+-- | Vars are applicative.
 --
 -- >>> let v = (,) <$> pure True <*> pure "Applicative"
 -- >>> testVarOver v [()]
 -- (True,"Applicative")
 --
 -- Note - checkout the <$proofs proofs>
-instance (Applicative m, Monad m) => Applicative (VarT m a) where
+instance Applicative m => Applicative (VarT m a) where
     pure = done
-    vf <*> vx = VarT $ \(!a) -> do
-      (f, vf') <- runVarT vf a
-      (x, vx') <- runVarT vx a
-      return (f x, vf' <*> vx')
+    vf <*> vx = VarT $ \a ->
+      g <$> runVarT vf a <*> runVarT vx a
+      where g (f, vf1) (x, vx1) = (f x, vf1 <*> vx1)
 
--- | Streams are arrows, which means you can use proc notation, among other
+-- | Vars are arrows, which means you can use proc notation, among other
 -- meanings.
 --
 -- >>> :set -XArrows
@@ -140,21 +144,59 @@ instance (Applicative m, Monad m) => Applicative (VarT m a) where
 -- 3
 -- 5
 -- 7
-instance (Applicative m, Monad m) => Arrow (VarT m) where
+instance Monad m => Arrow (VarT m) where
   arr = var
-  first v = VarT $ \(b,d) -> do (c, v') <- runVarT v b
-                                return ((c,d), first v')
+  first v = VarT $ \(b, d) -> g d <$> runVarT v b
+    where g d (c, v') = ((c, d), first v')
 
--- | Streams can be monoids
+instance MonadPlus m => ArrowZero (VarT m) where
+  zeroArrow = varM $ const mzero
+
+instance MonadPlus m => ArrowPlus (VarT m) where
+  VarT f <+> VarT g = VarT $ \a -> f a `mplus` g a
+
+-- |
+instance Monad m => ArrowChoice (VarT m) where
+  left f  = f +++ arr id
+  right f = arr id +++ f
+  f +++ g = (f >>> arr Left) ||| (g >>> arr Right)
+  f ||| g = VarT $ \case
+    Left b -> do
+      (d, f1) <- runVarT f b
+      return (d, f1 ||| g)
+    Right c -> do
+      (d, g1) <- runVarT g c
+      return (d, f ||| g1)
+
+instance Monad m => ArrowApply (VarT m) where
+  app = VarT $ \(v, b) -> do
+    (c, _) <- runVarT v b
+    return (c, app)
+
+instance MonadFix m => ArrowLoop (VarT m) where
+  loop vmbdcd = VarT $ \b -> fmap fst $ mfix $ \(_, d) -> do
+    ((c1, d1), vmbdcd1) <- runVarT vmbdcd (b, d)
+    return ((c1, loop vmbdcd1), d1)
+
+-- | VarT with its input and output parameters flipped.
+newtype FlipVarT m b a = FlipVarT { unFlipVarT :: VarT m a b }
+
+-- | A VarT is contravariant when the type arguments are flipped.
+instance Monad m => Contravariant (FlipVarT m b) where
+  contramap f (FlipVarT vmab) = FlipVarT $ VarT $ \c -> do
+    (b, vmab1) <- runVarT vmab $ f c
+    return (b, unFlipVarT $ contramap f $ FlipVarT vmab1)
+
+-- | Vars can be monoids
 --
 -- >>> let v = var (const "Hello ") `mappend` var (const "World!")
 -- >>> testVarOver v [()]
 -- "Hello World!"
-instance (Applicative m, Monad m, Monoid b) => Monoid (VarT m a b) where
+instance (Applicative m, Monoid b) => Monoid (VarT m a b) where
   mempty = pure mempty
   mappend = liftA2 mappend
 
--- | Streams can be written as numbers.
+-- | Vars can be written as numbers.
 --
 -- >>> let v = 1 >>> accumulate (+) 0
 -- >>> testVarOver v [(),(),()]
@@ -169,7 +211,7 @@ instance (Applicative m, Monad m, Num b) => Num (VarT m a b) where
     signum = fmap signum
     fromInteger = pure . fromInteger
 
--- | Streams can be written as floats.
+-- | Vars can be written as floats.
 --
 -- >>> let v = pi >>> accumulate (*) 1 >>> arr round
 -- >>> testVarOver v [(),(),()]
@@ -184,7 +226,7 @@ instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
     cos = fmap cos; cosh = fmap cosh; acos = fmap acos; acosh = fmap acosh
     atan = fmap atan; atanh = fmap atanh
 
--- | Streams can be written as fractionals.
+-- | Vars can be written as fractionals.
 --
 -- >>> let v = 2.5 >>> accumulate (/) 10
 -- >>> testVarOver v [(),(),()]
@@ -196,14 +238,14 @@ instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
     fromRational = pure . fromRational
 --------------------------------------------------------------------------------
 -- $creation
--- You can create a pure stream by lifting a function @(a -> b)@
+-- You can create a pure var by lifting a function @(a -> b)@
 -- with 'var':
 --
 -- > arr (+1) == var (+1) :: VarT m Int Int
 --
 -- 'var' is a parameterized version of 'arr'.
 --
--- You can create a monadic stream by lifting a monadic computation
+-- You can create a monadic var by lifting a monadic computation
 -- @(a -> m b)@ using 'varM':
 --
 -- @
@@ -213,7 +255,7 @@ instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
 --
 -- You can create either with the raw constructor. You can also create your
 -- own combinators using the raw constructor, as it allows you full control
--- over how streams are stepped and sampled:
+-- over how vars are stepped and sampled:
 --
 -- > delay :: Monad m => b -> VarT m a b -> VarT m a b
 -- > delay b v = VarT $ \a -> return (b, go a v)
@@ -221,37 +263,37 @@ instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
 -- >                                      return (b', go a' v'')
 -- >
 --------------------------------------------------------------------------------
--- | Lift a pure computation to a stream. This is 'arr' parameterized over the
+-- | Lift a pure computation to a var. This is 'arr' parameterized over the
 -- @a `VarT m` b@ arrow.
 var :: Applicative m => (a -> b) -> VarT m a b
-var f = VarT $ \(!a) -> pure (f a, var f)
+var f = VarT $ \a -> pure (f a, var f)
 
--- | Lift a monadic computation to a stream. This is
+-- | Lift a monadic computation to a var. This is
 -- <http://hackage.haskell.org/package/arrow-list-0.7/docs/Control-Arrow-Kleisli-Class.html#v:arrM arrM>
 -- parameterized over the @a `VarT m` b@ arrow.
 varM :: Monad m => (a -> m b) -> VarT m a b
-varM f = VarT $ \(!a) -> do
+varM f = VarT $ \a -> do
     b <- f a
     return (b, varM f)
 
--- | Lift a constant value to a stream.
-done :: (Applicative m, Monad m) => b -> VarT m a b
-done b = VarT $ \(!_) -> return (b, done b)
+-- | Lift a constant value to a var.
+done :: Applicative m => b -> VarT m a b
+done = var . const
 
--- | Create a stream from a state transformer.
+-- | Create a var from a state transformer.
 mkState :: Monad m
         => (a -> s -> (b, s)) -- ^ state transformer
         -> s -- ^ intial state
         -> VarT m a b
-mkState f s = VarT $ \(!a) -> do
+mkState f s = VarT $ \a -> do
   let (b', s') = f a s
   return (b', mkState f s')
 --------------------------------------------------------------------------------
 -- $composition
--- You can compose streams together using Category's '>>>' and '<<<'. The "right
--- plug" ('>>>') takes the output from a stream on the left and "plugs" it into
--- the input of the stream on the right. The "left plug" does the same thing in
--- the opposite direction. This allows you to write streams that read
+-- You can compose vars together using Category's '>>>' and '<<<'. The "right
+-- plug" ('>>>') takes the output from a var on the left and "plugs" it into
+-- the input of the var on the right. The "left plug" does the same thing in
+-- the opposite direction. This allows you to write vars that read
 -- naturally.
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -268,11 +310,11 @@ mkState f s = VarT $ \(!a) -> do
 -- >>> print $ foldl (++) [] $ words "hey there man"
 -- "heythereman"
 accumulate :: (Monad m, Applicative m) => (c -> b -> c) -> c -> VarT m b c
-accumulate f b = VarT $ \(!a) -> do
+accumulate f b = VarT $ \a -> do
     let b' = f b a
     return (b', accumulate f b')
 
--- | Delays the given stream by one sample using the argument as the first
+-- | Delays the given var by one sample using the argument as the first
 -- sample.
 --
 -- >>> testVarOver (delay 0 id) [1,2,3]
@@ -280,7 +322,7 @@ accumulate f b = VarT $ \(!a) -> do
 -- 1
 -- 2
 --
--- This enables the programmer to create streams that depend on
+-- This enables the programmer to create vars that depend on
 -- themselves for values. For example:
 --
 -- >>> let v = delay 0 v + 1 in testVarOver v [1,1,1]
@@ -288,13 +330,13 @@ accumulate f b = VarT $ \(!a) -> do
 -- 2
 -- 3
 delay :: (Monad m, Applicative m) => b -> VarT m a b -> VarT m a b
-delay b v = VarT $ \(!a) -> return (b, go a v)
-    where go a v' = VarT $ \(!a') -> do (b', v'') <- runVarT v' a
-                                        return (b', go a' v'')
+delay b v = VarT $ \a -> return (b, go a v)
+    where go a v' = VarT $ \a' -> do (b', v'') <- runVarT v' a
+                                     return (b', go a' v'')
 --------------------------------------------------------------------------------
 -- $running
--- To sample a stream simply run it in the desired monad with
--- 'runVarT'. This will produce a sample value and a new stream.
+-- To sample a var simply run it in the desired monad with
+-- 'runVarT'. This will produce a sample value and a new var.
 --
 -- >>> :{
 -- do let v0 = accumulate (+) 0
@@ -309,18 +351,18 @@ delay b v = VarT $ \(!a) -> return (b, go a v)
 -- 2
 -- 4
 --------------------------------------------------------------------------------
--- | Iterate a stream over a list of input until all input is consumed,
--- then iterate the stream using one single input. Returns the resulting
--- output value and the new stream.
+-- | Iterate a var over a list of input until all input is consumed,
+-- then iterate the var using one single input. Returns the resulting
+-- output value and the new var.
 --
 -- >>> let Identity (outputs, _) = stepMany (accumulate (+) 0) [1,1,1] 1
 -- >>> print outputs
 -- 4
 stepMany :: (Monad m, Functor m) => VarT m a b -> [a] -> a -> m (b, VarT m a b)
-stepMany v [] e = runVarT v e
+stepMany v [] e     = runVarT v e
 stepMany v (e:es) x = snd <$> runVarT v e >>= \v1 -> stepMany v1 es x
 
--- | Run the stream over the input values, gathering the output values in a
+-- | Run the var over the input values, gathering the output values in a
 -- list.
 --
 -- >>> let Identity (outputs, _) = scanVar (accumulate (+) 0) [1,1,1,1]
@@ -333,9 +375,9 @@ scanVar v = foldM f ([], v)
 --------------------------------------------------------------------------------
 -- Testing and debugging
 --------------------------------------------------------------------------------
--- | Trace the sample value of a stream and pass it along as output. This is
--- very useful for debugging graphs of streams. The (v|vs|vf)trace family of
--- streams use 'Debug.Trace.trace' under the hood, so the value is only traced
+-- | Trace the sample value of a var and pass it along as output. This is
+-- very useful for debugging graphs of vars. The (v|vs|vf)trace family of
+-- vars use 'Debug.Trace.trace' under the hood, so the value is only traced
 -- when evaluated.
 --
 -- >>> let v = id >>> vtrace
@@ -349,8 +391,9 @@ scanVar v = foldM f ([], v)
 vtrace :: (Applicative a, Show b) => VarT a b b
 vtrace = vstrace ""
 
--- | Trace the sample value of a stream with a prefix and pass the sample along
--- as output. This is very useful for debugging graphs of streams.
+
+-- | Trace the sample value of a var with a prefix and pass the sample along
+-- as output. This is very useful for debugging graphs of vars.
 --
 -- >>> let v = id >>> vstrace "test: "
 -- >>> testVarOver v [1,2,3]
@@ -364,7 +407,7 @@ vstrace :: (Applicative a, Show b) => String -> VarT a b b
 vstrace s = vftrace ((s ++) . show)
 
 -- | Trace the sample value using a custom show-like function. This is useful
--- when you would like to debug a stream that uses values that don't have show
+-- when you would like to debug a var that uses values that don't have show
 -- instances.
 --
 -- >>> newtype NotShowableInt = NotShowableInt { unNotShowableInt :: Int }
@@ -380,7 +423,7 @@ vstrace s = vftrace ((s ++) . show)
 vftrace :: Applicative a => (b -> String) -> VarT a b b
 vftrace f = var $ \b -> trace (f b) b
 
--- | Run a stream in IO over some input, printing the output each step. This is
+-- | Run a var in IO over some input, printing the output each step. This is
 -- the function we've been using throughout this documentation.
 testVarOver :: (MonadIO m, Show b) => VarT m a b -> [a] -> m ()
 testVarOver v xs = fst <$> scanVar v xs >>= mapM_ (liftIO . print)

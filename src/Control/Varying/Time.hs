@@ -1,12 +1,11 @@
 -- | Module:     Control.Varying.Time
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <schell@takt.com>
 module Control.Varying.Time where
 
-import Control.Varying.Core
-import Control.Varying.Event
-import Control.Applicative
+import           Control.Varying.Core
+import           Control.Varying.Event
 --------------------------------------------------------------------------------
 -- Using timed events
 --------------------------------------------------------------------------------

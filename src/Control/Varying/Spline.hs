@@ -2,7 +2,7 @@
 --   Module:     Control.Varying.SplineT
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <schell@takt.com>
 --
 --  Using splines we can easily create continuous streams from discontinuous
 --  streams. A spline is a monadic layer on top of event streams which are only
@@ -12,12 +12,12 @@
 --  stream. Once that "stream pair" inhibits, the computation completes and
 --  returns a result value. That result value is then used to determine the next
 --  spline in the sequence.
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE BangPatterns     #-}
+{-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs            #-}
+{-# LANGUAGE LambdaCase       #-}
+{-# LANGUAGE TupleSections    #-}
 module Control.Varying.Spline
   ( -- * Spline
     Spline
@@ -26,6 +26,7 @@ module Control.Varying.Spline
     -- * Creating streams from splines
   , outputStream
     -- * Creating splines from streams
+  , fromEvent
   , untilEvent
   , untilEvent_
   , _untilEvent
@@ -40,19 +41,15 @@ module Control.Varying.Spline
   , capture
   , mapOutput
   , adjustInput
-    -- * Helpers for debugging
-  , fromEvent
   ) where
 
-import Control.Varying.Core
-import Control.Varying.Event
-import Control.Monad
-import Control.Monad.Trans.Class
-import Control.Monad.IO.Class
-import Control.Applicative
-import Data.Functor.Identity
-import Data.Function
-import Data.Monoid
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Class
+import           Control.Varying.Core
+import           Control.Varying.Event
+import           Data.Functor.Identity
+import           Data.Monoid
 
 -- | 'SplineT' shares all the types of 'VarT' and adds a result value. Its
 -- monad, input and output types (@m@, @a@ and @b@, respectively) represent the
@@ -69,7 +66,7 @@ newtype SplineT a b m c = SplineT { runSplineT :: a -> m (Either c (b, SplineT a
 -- | A spline is a functor by applying the function to the result of the
 -- spline.
 instance (Applicative m, Monad m) => Functor (SplineT a b m) where
-  fmap f (SplineT s) = SplineT $ \a -> s a >>= \case
+  fmap f (SplineT s) = SplineT $ s >=> \case
     Left c        -> return $ Left $ f c
     Right (b, s1) -> return $ Right (b, fmap f s1)
 
@@ -97,7 +94,7 @@ instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
 
 -- | A spline is a transformer by using @effect@.
 instance MonadTrans (SplineT a b) where
-  lift f = SplineT $ const $ f >>= return . Left
+  lift f = SplineT $ const $ Left <$> f
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value.
@@ -131,7 +128,7 @@ fromEvent :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a (Event 
 fromEvent ve = SplineT $ \a -> do
   (e, ve1) <- runVarT ve a
   return $ case e of
-    Just b -> Left b
+    Just b  -> Left b
     Nothing -> Right (Nothing, fromEvent ve1)
 
 -- | Create a spline from a stream and an event stream. The spline
@@ -144,7 +141,7 @@ untilEvent v ve = SplineT $ f ((,) <$> v <*> ve)
   where f vve a = do t <-runVarT vve a
                      return $ case t of
                        ((b, Nothing), vve1) -> Right (b, SplineT $ f vve1)
-                       ((b, Just c),    _) -> Left (b, c)
+                       ((b, Just c),    _)  -> Left (b, c)
 
 -- | A variant of 'untilEvent' that results in the last known output value.
 untilEvent_ :: (Applicative m, Monad m)
@@ -207,7 +204,7 @@ merge apnd s1 s2 = SplineT $ f s1 s2
           Left c -> fr c vb a
           Right (b1, va1) -> runSplineT vb a >>= \case
             Left d -> return $ Right (b1, SplineT $ fl d va1)
-            Right (b2, vb1) -> return $ Right $ (apnd b1 b2, SplineT $ f va1 vb1)
+            Right (b2, vb1) -> return $ Right (apnd b1 b2, SplineT $ f va1 vb1)
 
 -- | Capture the spline's last output value and tuple it with the
 -- spline's result. This is helpful when you want to sample the last

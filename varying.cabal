@@ -35,7 +35,7 @@ author:              Schell Scivally
 
 -- An email address to which users can send suggestions, bug reports, and
 -- patches.
-maintainer:          schell.scivally@synapsegroup.com
+maintainer:          schell@takt.com
 
 -- A copyright notice.
 -- copyright:
@@ -76,6 +76,7 @@ library
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.6 && <5.0
                      , transformers >=0.3
+                     , contravariant >= 1.4
 
   -- Directories containing source files.
   hs-source-dirs:      src

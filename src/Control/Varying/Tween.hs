@@ -2,7 +2,7 @@
 --   Module:     Control.Varying.Tween
 --   Copyright:  (c) 2015 Schell Scivally
 --   License:    MIT
---   Maintainer: Schell Scivally <schell.scivally@synapsegroup.com>
+--   Maintainer: Schell Scivally <schell@takt.com>
 --
 --   Tweening is a technique of generating intermediate samples of a type
 --   __between__ a start and end value. By sampling a running tween
@@ -15,8 +15,7 @@
 --   dreams).
 
 --
-{-# LANGUAGE Rank2Types   #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE Rank2Types #-}
 module Control.Varying.Tween
   ( -- * Tweening types
     Easing
@@ -53,15 +52,14 @@ module Control.Varying.Tween
     -- $writing
   ) where
 
-import Control.Varying.Core
-import Control.Varying.Event
-import Control.Varying.Spline
-import Control.Varying.Time
-import Control.Arrow
-import Control.Applicative
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Class
-import Data.Functor.Identity
+import           Control.Monad             (void)
+import           Control.Monad.Trans.State (StateT, evalStateT, get, put,
+                                            runStateT)
+import           Control.Varying.Core      (VarT (..), done)
+import           Control.Varying.Spline    (SplineT (..), mapOutput, scanSpline,
+                                            untilEvent_)
+import           Control.Varying.Time      (after)
+import           Data.Functor.Identity     (Identity)
 
 --------------------------------------------------------------------------------
 -- $lerping
@@ -72,15 +70,15 @@ import Data.Functor.Identity
 --------------------------------------------------------------------------------
 -- | Ease in quadratic.
 easeInQuad :: (Num t, Fractional t, Real f) => Easing t f
-easeInQuad c t b =  c * (realToFrac $ t*t) + b
+easeInQuad c t b =  c * realToFrac (t*t) + b
 
 -- | Ease out quadratic.
 easeOutQuad :: (Num t, Fractional t, Real f) => Easing t f
-easeOutQuad c t b =  (-c) * (realToFrac $ t * (t - 2)) + b
+easeOutQuad c t b =  (-c) * realToFrac (t * (t - 2)) + b
 
 -- | Ease in cubic.
 easeInCubic :: (Num t, Fractional t, Real f) => Easing t f
-easeInCubic c t b =  c * (realToFrac $ t*t*t) + b
+easeInCubic c t b =  c * realToFrac (t*t*t) + b
 
 -- | Ease out cubic.
 easeOutCubic :: (Num t, Fractional t, Real f) => Easing t f
@@ -132,13 +130,13 @@ easeOutCirc c t b = let t' = (realToFrac t - 1)
 
 -- | Ease linear.
 linear :: (Floating t, Real f) => Easing t f
-linear c t b = c * (realToFrac t) + b
+linear c t b = c * realToFrac t + b
 
 type TweenT f t m = SplineT f t (StateT f m)
 type Tween f t = TweenT f t Identity
 
 runTweenT :: (Monad m, Num f)
-          => TweenT f t m x -> f -> f -> m (Either x ((t, TweenT f t m x)), f)
+          => TweenT f t m x -> f -> f -> m (Either x (t, TweenT f t m x), f)
 runTweenT s dt = runStateT (runSplineT s dt)
 
 scanTween :: (Functor m, Applicative m, Monad m, Num f)
@@ -152,7 +150,7 @@ tweenStream :: (Applicative m, Monad m, Num f)
 tweenStream s0 t0 = VarT $ f s0 t0 0
   where f s t l i = do (e, l1) <- runTweenT s i l
                        case e of
-                         Left _ -> return (t, done t)
+                         Left _        -> return (t, done t)
                          Right (b, s1) -> return (b, VarT $ f s1 b l1)
 --------------------------------------------------------------------------------
 -- $creation
@@ -197,7 +195,7 @@ tween f start end dur = SplineT g
 --
 tween_ :: (Applicative m, Monad m, Real t, Fractional t, Real f, Fractional f)
        => Easing t f -> t -> t -> f -> TweenT f t m ()
-tween_ f a b c = tween f a b c >> return ()
+tween_ f a b c = Control.Monad.void (tween f a b c)
 
 -- | A version of 'tween' that maps its output using the given constant
 -- function.
@@ -211,7 +209,7 @@ withTween ease from to dur f = mapOutput (pure f) $ tween ease from to dur
 -- | A version of 'withTween' that discards its output.
 withTween_ :: (Applicative m, Monad m, Real t, Fractional t, Real a, Fractional a)
            => Easing t a -> t -> t -> a -> (t -> x) -> TweenT a x m ()
-withTween_ ease from to dur f = withTween ease from to dur f >> return ()
+withTween_ ease from to dur f = Control.Monad.void (withTween ease from to dur f)
 
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Applicative m, Monad m, Num t, Ord t)
