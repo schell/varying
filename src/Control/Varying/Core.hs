@@ -1,6 +1,11 @@
+{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
+#if __GLASGOW_HASKELL__ > 710
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+#endif
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
@@ -53,9 +58,11 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Data.Functor.Contravariant
 import           Data.Functor.Identity
-import           Data.Monoid
 import           Debug.Trace
 import           Prelude                    hiding (id, (.))
+#if __GLASGOW_HASKELL__ < 710
+import           Data.Monoid
+#endif
 --------------------------------------------------------------------------------
 -- Core datatypes
 --------------------------------------------------------------------------------
@@ -87,12 +94,12 @@ instance Applicative m => Functor (VarT m b) where
   fmap f v = VarT $ (g <$>) . runVarT v
     where g (b, vb) = (f b, f <$> vb)
 
--- | A very simple category instance.
---
+-- | A var is a category.
 -- @
 --   id = var id
 --   f . g = g >>> f
 -- @
+--
 -- or
 --
 -- >  f . g = f <<< g
@@ -425,7 +432,8 @@ vftrace f = var $ \b -> trace (f b) b
 
 -- | Run a var in IO over some input, printing the output each step. This is
 -- the function we've been using throughout this documentation.
-testVarOver :: (MonadIO m, Show b) => VarT m a b -> [a] -> m ()
+testVarOver :: (Applicative m, Monad m, MonadIO m, Show b)
+            => VarT m a b -> [a] -> m ()
 testVarOver v xs = fst <$> scanVar v xs >>= mapM_ (liftIO . print)
 --------------------------------------------------------------------------------
 -- $proofs

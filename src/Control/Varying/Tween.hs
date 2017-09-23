@@ -1,6 +1,6 @@
 -- |
 --   Module:     Control.Varying.Tween
---   Copyright:  (c) 2015 Schell Scivally
+--   Copyright:  (c) 2016 Schell Scivally
 --   License:    MIT
 --   Maintainer: Schell Scivally <schell@takt.com>
 --
@@ -14,8 +14,7 @@
 --   arbitrary types, and possibly tween one type into another (pipe
 --   dreams).
 
---
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE Rank2Types   #-}
 module Control.Varying.Tween
   ( -- * Tweening types
     Easing
@@ -58,7 +57,7 @@ import           Control.Monad.Trans.State (StateT, evalStateT, get, put,
 import           Control.Varying.Core      (VarT (..), done)
 import           Control.Varying.Spline    (SplineT (..), mapOutput, scanSpline,
                                             untilEvent_)
-import           Control.Varying.Time      (after)
+import           Control.Varying.Event     (after)
 import           Data.Functor.Identity     (Identity)
 
 --------------------------------------------------------------------------------
@@ -81,15 +80,15 @@ easeInCubic :: (Num t, Fractional t, Real f) => Easing t f
 easeInCubic c t b =  c * realToFrac (t*t*t) + b
 
 -- | Ease out cubic.
-easeOutCubic :: (Num t, Fractional t, Real f) => Easing t f
+easeOutCubic :: (Fractional t, Real f) => Easing t f
 easeOutCubic c t b =  let t' = realToFrac t - 1 in c * (t'*t'*t' + 1) + b
 
 -- | Ease in by some power.
-easeInPow :: (Num t, Fractional t, Real f) => Int -> Easing t f
+easeInPow :: (Fractional t, Real f) => Int -> Easing t f
 easeInPow power c t b =  c * (realToFrac t^power) + b
 
 -- | Ease out by some power.
-easeOutPow :: (Num t, Fractional t, Real f) => Int -> Easing t f
+easeOutPow :: (Fractional t, Real f) => Int -> Easing t f
 easeOutPow power c t b =
     let t' = realToFrac t - 1
         c' = if power `mod` 2 == 1 then c else -c

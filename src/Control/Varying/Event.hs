@@ -1,5 +1,4 @@
-{-# LANGUAGE LambdaCase   #-}
-{-# LANGUAGE BangPatterns   #-}
+{-# LANGUAGE LambdaCase #-}
 -- |
 --   Module:     Control.Varying.Event
 --   Copyright:  (c) 2015 Schell Scivally
@@ -20,7 +19,10 @@
 --  is running.  For more info on switching and sequencing streams with events
 --  please check out 'Control.Varying.Spline', which lets you chain together
 --  sequences of values and events using a familiar do-notation.
-
+{-# LANGUAGE CPP        #-}
+#if __GLASGOW_HASKELL__ >= 800
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+#endif
 module Control.Varying.Event
   ( -- * Event constructors (synonyms of Maybe)
     Event
@@ -35,7 +37,7 @@ module Control.Varying.Event
   , foldStream
   , startingWith, startWith
     -- * Combining multiple event streams
-  , mergeE
+  , bothE
   , anyE
     -- * List-like operations on event streams
   , filterE
@@ -45,6 +47,8 @@ module Control.Varying.Event
   , once
   , always
   , never
+  , before
+  , after
     -- * Switching
   , switch
     -- * Bubbling
@@ -52,10 +56,16 @@ module Control.Varying.Event
   , onlyWhenE
   ) where
 
+import           Control.Applicative
 import           Control.Monad
 import           Control.Varying.Core
 import           Data.Foldable        (foldl')
 import           Prelude              hiding (until)
+
+-- stuff for FAMP
+#if __GLASGOW_HASKELL__ < 709
+import           Data.Function
+#endif
 
 type Event = Maybe
 
@@ -172,11 +182,12 @@ filterE p v = (join . (check <$>)) <$> v
 --------------------------------------------------------------------------------
 -- Using multiple streams
 --------------------------------------------------------------------------------
--- | Combine two 'Event' streams only when both proc at the same time.
-mergeE :: (Applicative m, Monad m)
+-- | Combine two 'Event' streams. Produces an event only when both streams proc
+-- at the same time.
+bothE :: (Applicative m, Monad m)
        => (a -> b -> c) -> VarT m a (Event a) -> VarT m a (Event b)
        -> VarT m a (Event c)
-mergeE f va vb = (\ea eb -> f <$> ea <*> eb) <$> va <*> vb
+bothE f va vb = (\ea eb -> f <$> ea <*> eb) <$> va <*> vb
 
 -- | Combine two 'Event' streams and produce an 'Event' any time either stream
 -- produces. In the case that both streams produce, this produces the 'Event'
@@ -190,7 +201,7 @@ anyE vs = VarT $ \a -> do
 --------------------------------------------------------------------------------
 -- Primitive event streams
 --------------------------------------------------------------------------------
--- | Produce the given value once and then inhibit forever.
+-- | Produce the given event value once and then inhibit forever.
 once :: (Applicative m, Monad m) => b -> VarT m a (Event b)
 once b = VarT $ \_ -> return (Just b, never)
 
@@ -209,6 +220,18 @@ never = pure Nothing
 -- @
 always :: (Applicative m, Monad m) => b -> VarT m a (Event b)
 always = pure . Just
+
+-- | Emits events before accumulating t of input dt.
+-- Note that as soon as we have accumulated >= t we stop emitting events
+-- and therefore an event will never be emitted exactly at time == t.
+before :: (Applicative m, Monad m, Num t, Ord t) => t -> VarT m t (Event t)
+before t = accumulate (+) 0 >>> onWhen (< t)
+
+-- | Emits events after t input has been accumulated.
+-- Note that event emission is not guaranteed to begin exactly at t,
+-- since it depends on the input.
+after :: (Applicative m, Monad m, Num t, Ord t) => t -> VarT m t (Event t)
+after t = accumulate (+) 0 >>> onWhen (>= t)
 
 --------------------------------------------------------------------------------
 -- Switching
@@ -254,8 +277,8 @@ switch = switchGo $ pure Nothing
 --------------------------------------------------------------------------------
 -- Bubbling
 --------------------------------------------------------------------------------
--- | Produce events of a value stream @v@ only when an event stream @h@
--- produces an event.
+-- | Produce events of a stream @v@ only when an event stream @h@ produces an
+-- event.
 -- @v@ and @h@ maintain state while cold.
 onlyWhenE :: (Applicative m, Monad m)
           => VarT m a b -- ^ @v@ - The value stream

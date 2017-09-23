@@ -35,7 +35,7 @@ tweenx = do
     -- Loop forever
     tweenx
 
--- A quadratic tween back and forth from 0 to 50 over 1 seconds that never
+-- An exponential tween back and forth from 0 to 50 over 1 seconds that never
 -- ends.
 tweeny :: (Applicative m, Monad m) => TweenT Float Float m Float
 tweeny = do
@@ -94,3 +94,7 @@ loop v t = do
   putStrLn str
   loop vNext t1
 ```
+
+# Publications
+
+The concept of `VarT` that this library is built on is isomorphic to Monadic Stream Functions as defined in "[Functional Reactive Programming, Refactored](http://dl.acm.org/citation.cfm?id=2976010)" ([mirror](http://www.cs.nott.ac.uk/~psxip1/#FRPRefactored)).

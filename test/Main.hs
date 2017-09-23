@@ -1,15 +1,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP #-}
+#if __GLASGOW_HASKELL__ > 710
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+#endif
+
 module Main where
 
+
 import Test.Hspec hiding (after, before)
-import Control.Applicative
 import Control.Varying
-import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
-import Control.Monad.Trans.State
-import Control.Monad (when)
 import Data.Functor.Identity
 import Data.Time.Clock
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative
+#endif
 
 main :: IO ()
 main = hspec $ do
@@ -26,6 +32,7 @@ main = hspec $ do
           varEv = 1 >>> after 3
           scans = fst $ runIdentity $ scanVar varEv $ replicate 4 ()
       scans `shouldBe` [Nothing, Nothing, Just 3, Just 4]
+
   describe "anyE" $
     it "should produce on any event" $ do
       let v1,v2,v3 :: Var () (Maybe Int)
@@ -67,9 +74,9 @@ main = hspec $ do
       it "should produce output exactly one time per call" $
         concat scans `shouldBe` "hey, there..."
 
-  describe "fromEvent" $ do
+  describe "untilProc" $ do
     let s = do
-          str <- fromEvent $ var f
+          str <- untilProc $ var f
           step $ Just str
           step $ Just "done"
         f :: Int -> Maybe String
@@ -121,6 +128,7 @@ main = hspec $ do
                 step "t"
                 return (2 :: Int)
         s = do x <- raceAny [s1,s2,s3]
+
                step $ show x
         Identity scans = scanSpline s "" $ replicate 3 ()
     it "should output in parallel (mappend) and return the first or leftmost result" $ unwords scans `shouldBe` "the cat 0"
@@ -129,7 +137,7 @@ main = hspec $ do
       let r :: Spline () String ()
           r = do x <- capture $ do step "a"
                                    step "b"
-                                   return 2
+                                   return (2 :: Int)
                  case x of
                    (Just "b", 2) -> step "True"
                    _ -> step "False"
@@ -184,8 +192,8 @@ main = hspec $ do
     let f = (+1)
         x = 1
     it "(homomorphism) pure f <*> pure x = pure (f x)" $
-      (fst $ runIdentity $ scanVar (pure f <*> pure x) [0..5])
-      `shouldBe` (fst $ runIdentity $ scanVar (pure $ f x) [0..5])
+      fst (runIdentity $ scanVar (pure f <*> pure x) [0..5])
+      `shouldBe` fst (runIdentity $ scanVar (pure $ f x) [0..5])
 
   describe "spline's applicative instance" $ do
     let ident = pure id <*> sinc
@@ -195,13 +203,13 @@ main = hspec $ do
         pfx = pure (1+1)
     it "(homomorphism) pure f <*> pure x = pure (f x)" $ equal pfpx pfx
     let u :: Spline a Int (Int -> Int)
-        u = pure 66 `_untilEvent` (use (+1) $ 1 >>> after (3 :: Int))
+        u = pure 66 `_untilEvent` use (+1) (1 >>> after (3 :: Int))
         upy = u <*> pure 1
         pyu = pure ($ 1) <*> u
     it "(interchange) u <*> pure y = pure ($ y) <*> u" $ equal upy pyu
     let v :: Spline a Int (Int -> Int)
-        v = pure 66 `_untilEvent` (use (1-) $ 1 >>> after (4 :: Float))
-        w = pure 72 `_untilEvent` (use 3 $ 1 >>> after (1 :: Float))
+        v = pure 66 `_untilEvent` use (1-) (1 >>> after (4 :: Float))
+        w = pure 72 `_untilEvent` use 3    (1 >>> after (1 :: Float))
         pduvw = pure (.) <*> u <*> v <*> w
         uvw = u <*> (v <*> w)
     it "(compisition) pure (.) <*> u <*> v <*> w = u <*> (v <*> w)" $

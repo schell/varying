@@ -10,7 +10,7 @@ name:                varying
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0.0
+version:             0.7.0.3
 
 -- A short (one-line) description of the package.
 synopsis:            FRP through value streams and monadic splines.
@@ -62,7 +62,6 @@ library
   -- Modules exported by the library.
   exposed-modules:     Control.Varying,
                        Control.Varying.Core,
-                       Control.Varying.Time,
                        Control.Varying.Event,
                        Control.Varying.Tween,
                        Control.Varying.Spline

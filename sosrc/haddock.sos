@@ -1,0 +1,5 @@
+# This is for reviewing documentation
+- patterns:
+  - .*/[^_]*\.l?hs$
+  commands:
+  - stack haddock

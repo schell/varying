@@ -1,0 +1,5 @@
+# This is for testing documentation
+- patterns:
+  - .*/[^_]*\.l?hs$
+  commands:
+  - stack exec doctest -- \0

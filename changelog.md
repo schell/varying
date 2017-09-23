@@ -25,5 +25,8 @@ change log
           output values and preventing time/space leaks. Updated tween types.
           Added withTween(_).
 
-1.0.0.0 - added proofs, reduced API size by removing trivial or weird (special)
-          combinators, changed some names, Event is a synonym of Maybe
+0.7.0.0 - added proofs, reduced API size by removing trivial or weird (special)
+          combinators, changed some names, Event is a synonym of Maybe, removed
+	  Time (moved functions to Event), renamed Event.mergeE to Event.bothE,
+          added Spline.untilProc and Spline.whileProc, documentation - working 
+	  towards 1.0

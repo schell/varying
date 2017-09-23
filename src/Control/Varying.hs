@@ -1,25 +1,22 @@
 -- |
 --  Module:     Control.Varying
---  Copyright:  (c) 2015 Schell Scivally
+--  Copyright:  (c) 2016 Schell Scivally
 --  License:    MIT
 --  Maintainer: Schell Scivally <schell@takt.com>
 --
 --  [@Core@]
---  Get started writing value streams using the pure constructor 'var', the
---  monadic constructor 'varM' or the raw constructor 'VarT'
+--  Automaton based value streams.
 --
 --  [@Event@]
---  Write event streams using the many event emitters and combinators.
+--  Discontinuous value streams that occur only sometimes.
 --
 --  [@Spline@]
---  Use do-notation to sequence event streams to form complex behavior.
+--  Sequencing of value and event streams using do-notation to form complex
+--  behavior.
 --
 --  [@Tween@]
---  Tween numerical values over time using interpolation functions and the
---  "quick 'n dirty" time generators in 'Control.Varying.Time'.
---
---  [@Time@]
---  Create time streams and temporal event streams.
+--  Tween numerical values over time using common easing functions. Great for
+--  animation.
 --
 module Control.Varying (
   -- * Reexports
@@ -29,5 +26,4 @@ module Control.Varying (
 import           Control.Varying.Core   as V
 import           Control.Varying.Event  as V
 import           Control.Varying.Spline as V
-import           Control.Varying.Time   as V
 import           Control.Varying.Tween  as V
