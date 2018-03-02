@@ -508,4 +508,4 @@ adjustInput vf0 s = SplineT $ g vf0 s
 -- ==Application
 -- > (m >>= f) >>= g = m >>= (\x -> f x >>= g)
 
--- TODO
+-- TODO: Finish the rest of the hand proofs
