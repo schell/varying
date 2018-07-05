@@ -194,6 +194,16 @@ instance Monad m => Contravariant (FlipVarT m b) where
     (b, vmab1) <- runVarT vmab $ f c
     return (b, unFlipVarT $ contramap f $ FlipVarT vmab1)
 
+#if __GLASGOW_HASKELL__ >= 840
+-- | Vars can be semigroups
+--
+-- >>> let v = var (const "Hello ") <> var (const "World!")
+-- >>> testVarOver v [()]
+-- "Hello World!"
+instance (Applicative m, Semigroup b) => Semigroup (VarT m a b) where
+  (<>) = liftA2 (<>)
+#endif
+
 -- | Vars can be monoids
 --
 -- >>> let v = var (const "Hello ") `mappend` var (const "World!")
