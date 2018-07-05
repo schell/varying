@@ -64,7 +64,7 @@ import           Data.Functor.Identity     (Identity)
 -- $lerping
 -- These pure functions take a `c` (total change in value, ie end - start),
 -- `t` (percent of duration completion) and `b` (start value) and result in
--- and interpolation of a value. To see what these look like please check
+-- an interpolation of a value. To see what these look like please check
 -- out http://www.gizma.com/easing/.
 --------------------------------------------------------------------------------
 -- | Ease in quadratic.
@@ -138,7 +138,7 @@ runTweenT :: (Monad m, Num f)
           => TweenT f t m x -> f -> f -> m (Either x (t, TweenT f t m x), f)
 runTweenT s dt = runStateT (runSplineT s dt)
 
-scanTween :: (Functor m, Applicative m, Monad m, Num f)
+scanTween :: (Applicative m, Monad m, Num f)
           => TweenT f t m a -> t -> [f] -> m [t]
 scanTween s t dts = evalStateT (scanSpline s t dts) 0
 
