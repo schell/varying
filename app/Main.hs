@@ -27,7 +27,7 @@ easeMiddle start end t = do
 -- An exponential tween back and forth from 0 to 50 over 1 seconds that
 -- loops forever. This spline takes float values of delta time as input,
 -- outputs the current x value at every step.
-tweenx :: (Applicative m, Monad m) => TweenT Float Float m ()
+tweenx :: Monad m => TweenT Float Float m ()
 tweenx = do
     -- Tween from 0 to 50 over 'dur' seconds
     easeMiddle 0 50 dur
@@ -38,14 +38,14 @@ tweenx = do
 
 -- A quadratic tween back and forth from 0 to 50 over 1 seconds that never
 -- ends.
-tweeny :: (Applicative m, Monad m) => TweenT Float Float m ()
+tweeny :: Monad m => TweenT Float Float m ()
 tweeny = do
     easeMiddle 50 0 dur
     easeMiddle 0 50 dur
     tweeny
 
 -- | Our Point value that varies over time continuously in x and y.
-backAndForth :: (Applicative m, Monad m) => VarT m Float Point
+backAndForth :: Monad m => VarT m Float Point
 backAndForth =
     -- Turn our splines into continuous output streams. We must provide
     -- a starting value since splines are not guaranteed to be defined at

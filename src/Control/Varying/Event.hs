@@ -98,7 +98,7 @@ use a v = (a <$) <$> v
 -- @
 -- 'use' b 'onTrue' :: 'Monad' m => 'VarT' m 'Bool' ('Event' b)
 -- @
-onTrue :: (Applicative m, Monad m) => VarT m Bool (Event ())
+onTrue :: Monad m => VarT m Bool (Event ())
 onTrue = var $ \b -> if b then Just () else Nothing
 
 -- | Triggers an @'Event' a@ when the input is distinct from the previous
@@ -107,7 +107,7 @@ onTrue = var $ \b -> if b then Just () else Nothing
 -- @
 -- 'use' b 'onUnique' :: ('Eq' x, 'Monad' m) => 'VarT' m x ('Event' b)
 -- @
-onUnique :: (Applicative m, Monad m, Eq a) => VarT m a (Event a)
+onUnique :: (Monad m, Eq a) => VarT m a (Event a)
 onUnique = VarT $ \a -> return (Just a, trigger a)
     where trigger a' = VarT $ \a'' -> let e = if a' == a''
                                              then Nothing
@@ -147,7 +147,7 @@ foldStream f acc = VarT $ \e ->
 -- 3
 -- 3
 startWith, startingWith
-  :: (Applicative m, Monad m)
+  :: Monad m
   => a
   -> VarT m (Event a) a
 startWith    = foldStream (\_ a -> a)
@@ -155,7 +155,7 @@ startingWith = startWith
 
 -- | Stream through some number of successful 'Event's and then inhibit
 -- forever.
-takeE :: (Applicative m, Monad m)
+takeE :: Monad m
       => Int -> VarT m a (Event b) -> VarT m a (Event b)
 takeE 0 _ = never
 takeE n ve = VarT $ \a -> do
@@ -165,7 +165,7 @@ takeE n ve = VarT $ \a -> do
         Just  b -> return (Just b, takeE (n-1) ve')
 
 -- | Inhibit the first n occurences of an 'Event'.
-dropE :: (Applicative m, Monad m)
+dropE :: Monad m
       => Int -> VarT m a (Event b) -> VarT m a (Event b)
 dropE 0 ve = ve
 dropE n ve = VarT $ \a -> do
@@ -175,7 +175,7 @@ dropE n ve = VarT $ \a -> do
         Just  _ -> return (Nothing, dropE (n-1) ve')
 
 -- | Inhibit all 'Event's that don't pass the predicate.
-filterE :: (Applicative m, Monad m)
+filterE :: Monad m
         => (b -> Bool) -> VarT m a (Event b) -> VarT m a (Event b)
 filterE p v = (join . (check <$>)) <$> v
   where check b = if p b then Just b else Nothing
@@ -184,7 +184,7 @@ filterE p v = (join . (check <$>)) <$> v
 --------------------------------------------------------------------------------
 -- | Combine two 'Event' streams. Produces an event only when both streams proc
 -- at the same time.
-bothE :: (Applicative m, Monad m)
+bothE :: Monad m
        => (a -> b -> c) -> VarT m a (Event a) -> VarT m a (Event b)
        -> VarT m a (Event c)
 bothE f va vb = (\ea eb -> f <$> ea <*> eb) <$> va <*> vb
@@ -192,7 +192,7 @@ bothE f va vb = (\ea eb -> f <$> ea <*> eb) <$> va <*> vb
 -- | Combine two 'Event' streams and produce an 'Event' any time either stream
 -- produces. In the case that both streams produce, this produces the 'Event'
 -- of the leftmost stream.
-anyE :: (Applicative m, Monad m) => [VarT m a (Event b)] -> VarT m a (Event b)
+anyE :: Monad m => [VarT m a (Event b)] -> VarT m a (Event b)
 anyE [] = never
 anyE vs = VarT $ \a -> do
   outs <- mapM (`runVarT` a) vs
@@ -202,7 +202,7 @@ anyE vs = VarT $ \a -> do
 -- Primitive event streams
 --------------------------------------------------------------------------------
 -- | Produce the given event value once and then inhibit forever.
-once :: (Applicative m, Monad m) => b -> VarT m a (Event b)
+once :: Monad m => b -> VarT m a (Event b)
 once b = VarT $ \_ -> return (Just b, never)
 
 -- | Never produces any 'Event' values.
@@ -210,7 +210,7 @@ once b = VarT $ \_ -> return (Just b, never)
 -- @
 -- 'never' = 'pure' 'Nothing'
 -- @
-never :: (Applicative m, Monad m) => VarT m b (Event c)
+never :: Monad m => VarT m b (Event c)
 never = pure Nothing
 
 -- | Produces 'Event's with the initial value forever.
@@ -218,19 +218,19 @@ never = pure Nothing
 -- @
 -- 'always' e = 'pure' ('Event' e)
 -- @
-always :: (Applicative m, Monad m) => b -> VarT m a (Event b)
+always :: Monad m => b -> VarT m a (Event b)
 always = pure . Just
 
 -- | Emits events before accumulating t of input dt.
 -- Note that as soon as we have accumulated >= t we stop emitting events
 -- and therefore an event will never be emitted exactly at time == t.
-before :: (Applicative m, Monad m, Num t, Ord t) => t -> VarT m t (Event t)
+before :: (Monad m, Num t, Ord t) => t -> VarT m t (Event t)
 before t = accumulate (+) 0 >>> onWhen (< t)
 
 -- | Emits events after t input has been accumulated.
 -- Note that event emission is not guaranteed to begin exactly at t,
 -- since it depends on the input.
-after :: (Applicative m, Monad m, Num t, Ord t) => t -> VarT m t (Event t)
+after :: (Monad m, Num t, Ord t) => t -> VarT m t (Event t)
 after t = accumulate (+) 0 >>> onWhen (>= t)
 
 --------------------------------------------------------------------------------
@@ -262,7 +262,7 @@ after t = accumulate (+) 0 >>> onWhen (>= t)
 -- Just 5
 -- Just 5
 switch
-  :: (Applicative m, Monad m)
+  :: Monad m
   => VarT m a (Event (VarT m a b))
   -> VarT m a (Event b)
 switch = switchGo $ pure Nothing
@@ -280,7 +280,7 @@ switch = switchGo $ pure Nothing
 -- | Produce events of a stream @v@ only when an event stream @h@ produces an
 -- event.
 -- @v@ and @h@ maintain state while cold.
-onlyWhenE :: (Applicative m, Monad m)
+onlyWhenE :: Monad m
           => VarT m a b -- ^ @v@ - The value stream
           -> VarT m a (Event c) -- ^ @h@ - The event stream
           -> VarT m a (Event b)
@@ -294,7 +294,7 @@ onlyWhenE v hot = VarT $ \a -> do
 -- | Produce 'Event's of a value stream @v@ only when its input value passes a
 -- predicate @f@.
 -- @v@ maintains state while cold.
-onlyWhen :: (Applicative m, Monad m)
+onlyWhen :: Monad m
          => VarT m a b -- ^ @v@ - The value stream
          -> (a -> Bool) -- ^ @f@ - The predicate to run on @v@'s input values.
          -> VarT m a (Event b)

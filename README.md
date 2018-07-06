@@ -26,7 +26,7 @@ newtype Delta = Delta { unDelta :: Float }
 -- An exponential tween back and forth from 0 to 50 over 1 seconds that
 -- loops forever. This spline takes float values of delta time as input,
 -- outputs the current x value at every step.
-tweenx :: (Applicative m, Monad m) => TweenT Float Float m Float
+tweenx :: Monad m => TweenT Float Float m Float
 tweenx = do
     -- Tween from 0 to 50 over 1 second
     tween_ easeOutExpo 0 50 1
@@ -37,18 +37,18 @@ tweenx = do
 
 -- An exponential tween back and forth from 0 to 50 over 1 seconds that never
 -- ends.
-tweeny :: (Applicative m, Monad m) => TweenT Float Float m Float
+tweeny :: Monad m => TweenT Float Float m Float
 tweeny = do
     tween_ easeOutExpo 50 0 1
     tween_ easeOutExpo 0 50 1
     tweeny
 
 -- Our time signal counts input delta time samples.
-time :: (Applicative m, Monad m) => VarT m Delta Float
+time :: Monad m => VarT m Delta Float
 time = var unDelta
 
 -- | Our Point value that varies over time continuously in x and y.
-backAndForth :: (Applicative m, Monad m) => VarT m Delta Point
+backAndForth :: Monad m => VarT m Delta Point
 backAndForth =
     -- Turn our splines into continuous output streams. We must provide
     -- a starting value since splines are not guaranteed to be defined at
