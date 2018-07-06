@@ -231,6 +231,6 @@ constant value duration = pure value `untilEvent_` after duration
 -- duration that has elapsed and `b` is the start value.
 --
 -- To make things simple only numerical values can be tweened and the type
--- of time deltas much match the tween's value type. This may change in the
+-- of time deltas must match the tween's value type. This may change in the
 -- future :)
 type Easing t f = t -> f -> t -> t
