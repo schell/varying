@@ -194,7 +194,7 @@ instance Monad m => Contravariant (FlipVarT m b) where
     (b, vmab1) <- runVarT vmab $ f c
     return (b, unFlipVarT $ contramap f $ FlipVarT vmab1)
 
-#if __GLASGOW_HASKELL__ >= 840
+#if __GLASGOW_HASKELL__ >= 804
 -- | Vars can be semigroups
 --
 -- >>> let v = var (const "Hello ") <> var (const "World!")
