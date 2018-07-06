@@ -20,9 +20,6 @@
 --  please check out 'Control.Varying.Spline', which lets you chain together
 --  sequences of values and events using a familiar do-notation.
 {-# LANGUAGE CPP        #-}
-#if __GLASGOW_HASKELL__ >= 800
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-#endif
 module Control.Varying.Event
   ( -- * Event constructors (synonyms of Maybe)
     Event
@@ -61,11 +58,6 @@ import           Control.Monad
 import           Control.Varying.Core
 import           Data.Foldable        (foldl')
 import           Prelude              hiding (until)
-
--- stuff for FAMP
-#if __GLASGOW_HASKELL__ < 709
-import           Data.Function
-#endif
 
 type Event = Maybe
 

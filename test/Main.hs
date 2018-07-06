@@ -1,8 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ > 710
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-#endif
 
 module Main where
 
@@ -12,10 +9,6 @@ import Control.Varying
 import Control.Monad.IO.Class
 import Data.Functor.Identity
 import Data.Time.Clock
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative
-#endif
 
 main :: IO ()
 main = hspec $ do
