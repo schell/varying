@@ -131,6 +131,10 @@ easeOutCirc c t b = let t' = (realToFrac t - 1)
 linear :: (Floating t, Real f) => Easing t f
 linear c t b = c * realToFrac t + b
 
+-- TODO: Don't use StateT for leftover time in Tweens.
+-- This creates a funky state where running two tween splines together
+-- causes leftover time interplay. Think about continuations or something.
+
 type TweenT f t m = SplineT f t (StateT f m)
 type Tween f t = TweenT f t Identity
 
@@ -151,6 +155,7 @@ tweenStream s0 t0 = VarT $ f s0 t0 0
                        case e of
                          Left _        -> return (t, done t)
                          Right (b, s1) -> return (b, VarT $ f s1 b l1)
+
 --------------------------------------------------------------------------------
 -- $creation
 -- The most direct route toward tweening values is to use 'tween'
