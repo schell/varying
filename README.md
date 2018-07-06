@@ -98,3 +98,12 @@ loop v t = do
 # Publications
 
 The concept of `VarT` that this library is built on is isomorphic to Monadic Stream Functions as defined in "[Functional Reactive Programming, Refactored](http://dl.acm.org/citation.cfm?id=2976010)" ([mirror](http://www.cs.nott.ac.uk/~psxip1/#FRPRefactored)).
+
+The isomorphism is
+``` haskell
+toMSF :: Functor m => VarT m a b -> MSF m a b
+toMSF = MSF . (fmap . fmap . fmap $ toMSF) . runVarT
+
+toVarT :: Functor m => MSF m a b -> VarT m a b
+toVarT = VarT . (fmap . fmap . fmap $ toVarT) . unMSF
+```
