@@ -19,7 +19,7 @@
 --  is running.  For more info on switching and sequencing streams with events
 --  please check out 'Control.Varying.Spline', which lets you chain together
 --  sequences of values and events using a familiar do-notation.
-{-# LANGUAGE CPP        #-}
+
 module Control.Varying.Event
   ( -- * Event constructors (synonyms of Maybe)
     Event

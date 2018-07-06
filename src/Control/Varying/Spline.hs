@@ -12,7 +12,6 @@
 --  stream. Once that "stream pair" inhibits, the computation completes and
 --  returns a result value. That result value is then used to determine the next
 --  spline in the sequence.
-{-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs            #-}
 {-# LANGUAGE LambdaCase       #-}
