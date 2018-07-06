@@ -91,7 +91,7 @@ newtype SplineT a b m c =
 -- >>> :}
 -- "first"
 -- "(\"first\",2)"
-instance (Applicative m, Monad m) => Functor (SplineT a b m) where
+instance Monad m => Functor (SplineT a b m) where
   fmap f (SplineT s) = SplineT $ s >=> \case
     Left c        -> return $ Left $ f c
     Right (b, s1) -> return $ Right (b, fmap f s1)
@@ -100,7 +100,7 @@ instance (Applicative m, Monad m) => Functor (SplineT a b m) where
 -- then uses that value to run the next spline.
 --
 -- Note - checkout the <$proofs proofs>
-instance (Applicative m, Monad m) => Monad (SplineT a b m) where
+instance Monad m => Monad (SplineT a b m) where
   return = SplineT . const . return . Left
   (SplineT s0) >>= f = SplineT $ g s0
     where g s a = do e <- s a
@@ -120,7 +120,7 @@ instance (Applicative m, Monad m) => Monad (SplineT a b m) where
 --   x <- sx
 --   return $ f x
 -- @
-instance (Applicative m, Monad m) => Applicative (SplineT a b m) where
+instance Monad m => Applicative (SplineT a b m) where
   pure = return
   sf <*> sx = do
     f <- sf
@@ -143,7 +143,7 @@ instance MonadTrans (SplineT a b) where
 
 -- | A spline can do IO if its underlying monad has a MonadIO instance. It
 -- takes the result of the IO action as its immediate return value.
-instance (Applicative m, Monad m, MonadIO m) => MonadIO (SplineT a b m) where
+instance (Monad m, MonadIO m) => MonadIO (SplineT a b m) where
   liftIO = lift . liftIO
 
 -- | A SplineT monad parameterized with Identity that takes input of type @a@,
@@ -170,7 +170,7 @@ type Spline a b c = SplineT a b Identity c
 -- "accumulating until 4"
 -- "accumulating until 4"
 -- "done"
-outputStream :: (Applicative m, Monad m)
+outputStream :: Monad m
              => SplineT a b m c -> b -> VarT m a b
 outputStream (SplineT s0) b0 = VarT $ f s0 b0
   where f s b a = do e <- s a
@@ -180,12 +180,12 @@ outputStream (SplineT s0) b0 = VarT $ f s0 b0
 
 -- | Run the spline over the input values, gathering the output values in a
 -- list.
-scanSpline :: (Applicative m, Monad m)
+scanSpline :: Monad m
            => SplineT a b m c -> b -> [a] -> m [b]
 scanSpline s b = fmap fst <$> scanVar (outputStream s b)
 
 -- | Create a spline from an event stream.
-fromEvent :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a (Event b) m b
+fromEvent :: Monad m => VarT m a (Event b) -> SplineT a (Event b) m b
 fromEvent ve = SplineT $ \a -> do
   (e, ve1) <- runVarT ve a
   return $ case e of
@@ -194,14 +194,14 @@ fromEvent ve = SplineT $ \a -> do
 
 -- | Create a spline from an event stream. Outputs 'noevent' until the event
 -- stream procs, at which point the spline concludes with the event value.
-untilProc :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a (Event b) m b
+untilProc :: Monad m => VarT m a (Event b) -> SplineT a (Event b) m b
 untilProc ve = SplineT $ runVarT ve >=> return . \case
   (Just b,    _) -> Left b
   (Nothing, ve1) -> Right (Nothing, untilProc ve1)
 
 -- | Create a spline from an event stream. Outputs @b@ until the event stream
 -- inhibits, at which point the spline concludes with @()@.
-whileProc :: (Applicative m, Monad m) => VarT m a (Event b) -> SplineT a b m ()
+whileProc :: Monad m => VarT m a (Event b) -> SplineT a b m ()
 whileProc ve = SplineT $ runVarT ve >=> return . \case
   (Just b, ve1) -> Right (b, whileProc ve1)
   (Nothing,  _) -> Left ()
@@ -210,7 +210,7 @@ whileProc ve = SplineT $ runVarT ve >=> return . \case
 -- uses the stream's values as its own output values. The spline will run until
 -- the event stream produces an event, at that point the last known output
 -- value and the event value are tupled and returned as the spline's result.
-untilEvent :: (Applicative m, Monad m)
+untilEvent :: Monad m
            => VarT m a b -> VarT m a (Event c) -> SplineT a b m (b,c)
 untilEvent v ve = SplineT $ f ((,) <$> v <*> ve)
   where f vve a = do t <-runVarT vve a
@@ -219,17 +219,17 @@ untilEvent v ve = SplineT $ f ((,) <$> v <*> ve)
                        ((b, Just c),    _)  -> Left (b, c)
 
 -- | A variant of 'untilEvent' that results in the last known output value.
-untilEvent_ :: (Applicative m, Monad m)
+untilEvent_ :: Monad m
             => VarT m a b -> VarT m a (Event c) -> SplineT a b m b
 untilEvent_ v ve = fst <$> untilEvent v ve
 
 -- | A variant of 'untilEvent' that results in the event steam's event value.
-_untilEvent :: (Applicative m, Monad m)
+_untilEvent :: Monad m
             => VarT m a b -> VarT m a (Event c) -> SplineT a b m c
 _untilEvent v ve = snd <$> untilEvent v ve
 
 -- | A variant of 'untilEvent' that discards both the output and event values.
-_untilEvent_ :: (Applicative m, Monad m)
+_untilEvent_ :: Monad m
              => VarT m a b -> VarT m a (Event c) -> SplineT a b m ()
 _untilEvent_ v ve = void $ _untilEvent v ve
 
@@ -248,7 +248,7 @@ _untilEvent_ v ve = void $ _untilEvent v ve
 -- "route 666"
 -- "Left 2"
 -- "Left 2"
-race :: (Applicative m, Monad m)
+race :: Monad m
      => (a -> b -> c) -> SplineT i a m d -> SplineT i b m e
      -> SplineT i c m (Either d e)
 race f sa0 sb0 = SplineT (g sa0 sb0)
@@ -274,7 +274,7 @@ race f sa0 sb0 = SplineT (g sa0 sb0)
 -- >>> :}
 -- "hey there!"
 -- "2"
-raceAny :: (Applicative m, Monad m, Monoid b)
+raceAny :: (Monad m, Monoid b)
          => [SplineT a b m c] -> SplineT a b m c
 raceAny [] = pure mempty `_untilEvent` never
 raceAny ss = SplineT $ f [] (map runSplineT ss) mempty
@@ -297,7 +297,7 @@ raceAny ss = SplineT $ f [] (map runSplineT ss) mempty
 -- "hey there!"
 -- "hey "
 -- "(3,2)"
-merge :: (Applicative m, Monad m)
+merge :: Monad m
      => (b -> b -> b)
      -> SplineT a b m c -> SplineT a b m d -> SplineT a b m (c, d)
 merge apnd s1 s2 = SplineT $ f s1 s2
@@ -335,7 +335,7 @@ merge apnd s1 s2 = SplineT $ f s1 s2
 -- 1
 -- 2
 -- 3
-capture :: (Applicative m, Monad m)
+capture :: Monad m
         => SplineT a b m c -> SplineT a b m (Event b, c)
 capture = SplineT . f Nothing
     where f mb s = runSplineT s >=> return . \case
@@ -354,7 +354,7 @@ capture = SplineT . f Nothing
 -- "there"
 -- "friend"
 -- "friend"
-step :: (Applicative m, Monad m) => b -> SplineT a b m ()
+step :: Monad m => b -> SplineT a b m ()
 step b = SplineT $ const $ return $ Right (b, return ())
 
 -- | Map the output value of a spline.
@@ -366,7 +366,7 @@ step b = SplineT $ const $ return $ Right (b, return ())
 -- "1"
 -- "2"
 -- "3"
-mapOutput :: (Applicative m, Monad m)
+mapOutput :: Monad m
           => VarT m a (b -> t) -> SplineT a b m c -> SplineT a t m c
 mapOutput vf0 s0 = SplineT $ g vf0 s0
     where g vf s a = do
@@ -376,7 +376,7 @@ mapOutput vf0 s0 = SplineT $ g vf0 s0
               Right (b, s1) -> Right (f b, SplineT $ g vf1 s1)
 
 -- | Map the input value of a spline.
-adjustInput :: (Applicative m, Monad m)
+adjustInput :: Monad m
             => VarT m a (a -> r) -> SplineT r b m c -> SplineT a b m c
 adjustInput vf0 s = SplineT $ g vf0 s
   where g vf sx a = do

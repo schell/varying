@@ -220,7 +220,7 @@ instance (Applicative m, Monoid b) => Monoid (VarT m a b) where
 -- 1
 -- 2
 -- 3
-instance (Applicative m, Monad m, Num b) => Num (VarT m a b) where
+instance (Monad m, Num b) => Num (VarT m a b) where
     (+) = liftA2 (+)
     (-) = liftA2 (-)
     (*) = liftA2 (*)
@@ -235,7 +235,7 @@ instance (Applicative m, Monad m, Num b) => Num (VarT m a b) where
 -- 3
 -- 10
 -- 31
-instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
+instance (Monad m, Floating b) => Floating (VarT m a b) where
     pi = pure pi
     exp = fmap exp
     log = fmap log
@@ -250,7 +250,7 @@ instance (Applicative m, Monad m, Floating b) => Floating (VarT m a b) where
 -- 4.0
 -- 1.6
 -- 0.64
-instance (Applicative m, Monad m, Fractional b) => Fractional (VarT m a b) where
+instance (Monad m, Fractional b) => Fractional (VarT m a b) where
     (/) = liftA2 (/)
     fromRational = pure . fromRational
 --------------------------------------------------------------------------------
@@ -326,7 +326,7 @@ mkState f s = VarT $ \a -> do
 --
 -- >>> print $ foldl (++) [] $ words "hey there man"
 -- "heythereman"
-accumulate :: (Monad m, Applicative m) => (c -> b -> c) -> c -> VarT m b c
+accumulate :: Monad m => (c -> b -> c) -> c -> VarT m b c
 accumulate f b = VarT $ \a -> do
     let b' = f b a
     return (b', accumulate f b')
@@ -346,7 +346,7 @@ accumulate f b = VarT $ \a -> do
 -- 1
 -- 2
 -- 3
-delay :: (Monad m, Applicative m) => b -> VarT m a b -> VarT m a b
+delay :: Monad m => b -> VarT m a b -> VarT m a b
 delay b v = VarT $ \a -> return (b, go a v)
     where go a v' = VarT $ \a' -> do (b', v'') <- runVarT v' a
                                      return (b', go a' v'')
@@ -375,7 +375,7 @@ delay b v = VarT $ \a -> return (b, go a v)
 -- >>> let Identity (outputs, _) = stepMany (accumulate (+) 0) [1,1,1] 1
 -- >>> print outputs
 -- 4
-stepMany :: (Monad m, Functor m) => VarT m a b -> [a] -> a -> m (b, VarT m a b)
+stepMany :: (Monad m) => VarT m a b -> [a] -> a -> m (b, VarT m a b)
 stepMany v [] e     = runVarT v e
 stepMany v (e:es) x = snd <$> runVarT v e >>= \v1 -> stepMany v1 es x
 
@@ -385,7 +385,7 @@ stepMany v (e:es) x = snd <$> runVarT v e >>= \v1 -> stepMany v1 es x
 -- >>> let Identity (outputs, _) = scanVar (accumulate (+) 0) [1,1,1,1]
 -- >>> print outputs
 -- [1,2,3,4]
-scanVar :: (Applicative m, Monad m) => VarT m a b -> [a] -> m ([b], VarT m a b)
+scanVar :: Monad m => VarT m a b -> [a] -> m ([b], VarT m a b)
 scanVar v = foldM f ([], v)
     where f (outs, v') a = do (b, v'') <- runVarT v' a
                               return (outs ++ [b], v'')
@@ -442,7 +442,7 @@ vftrace f = var $ \b -> trace (f b) b
 
 -- | Run a var in IO over some input, printing the output each step. This is
 -- the function we've been using throughout this documentation.
-testVarOver :: (Applicative m, Monad m, MonadIO m, Show b)
+testVarOver :: (Monad m, MonadIO m, Show b)
             => VarT m a b -> [a] -> m ()
 testVarOver v xs = fst <$> scanVar v xs >>= mapM_ (liftIO . print)
 --------------------------------------------------------------------------------
