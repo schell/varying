@@ -73,7 +73,7 @@ library
   -- other-extensions:
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <5.0
+  build-depends:       base >=4.8 && <5.0
                      , transformers >=0.3
                      , contravariant >= 1.4
 
@@ -87,7 +87,7 @@ executable varying-example
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <5.0
+  build-depends:       base >=4.8 && <5.0
                      , transformers >=0.3
                      , time >=1.4
                      , varying
@@ -106,7 +106,7 @@ test-suite varying-test
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6 && <5.0
+  build-depends:       base >=4.8 && <5.0
                      , time >=1.4
                      , transformers
                      , varying
@@ -126,7 +126,7 @@ benchmark varying-bench
   ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-N
 
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.6
+  build-depends:       base >=4.8
                      , time >=1.4
                      , transformers
                      , varying
