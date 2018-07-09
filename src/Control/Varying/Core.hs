@@ -3,9 +3,6 @@
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-#if __GLASGOW_HASKELL__ > 710
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-#endif
 -- |
 --   Module:     Control.Varying.Core
 --   Copyright:  (c) 2015 Schell Scivally
@@ -60,9 +57,7 @@ import           Data.Functor.Contravariant
 import           Data.Functor.Identity
 import           Debug.Trace
 import           Prelude                    hiding (id, (.))
-#if __GLASGOW_HASKELL__ < 710
-import           Data.Monoid
-#endif
+
 --------------------------------------------------------------------------------
 -- Core datatypes
 --------------------------------------------------------------------------------

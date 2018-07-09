@@ -12,7 +12,6 @@
 --  stream. Once that "stream pair" inhibits, the computation completes and
 --  returns a result value. That result value is then used to determine the next
 --  spline in the sequence.
-{-# LANGUAGE CPP              #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs            #-}
 {-# LANGUAGE LambdaCase       #-}
@@ -53,12 +52,6 @@ import           Control.Varying.Core
 import           Control.Varying.Event
 import           Data.Functor.Identity
 import           Data.Monoid
-
--- stuff for FAMP
-#if __GLASGOW_HASKELL__ < 709
-import Control.Applicative
-import Data.Function
-#endif
 
 -- $setup
 -- >>> import Control.Varying.Time
