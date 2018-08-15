@@ -107,5 +107,3 @@ toMSF = MSF . (fmap . fmap . fmap $ toMSF) . runVarT
 toVarT :: Functor m => MSF m a b -> VarT m a b
 toVarT = VarT . (fmap . fmap . fmap $ toVarT) . unMSF
 ```
-
-:)
