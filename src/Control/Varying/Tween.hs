@@ -172,7 +172,7 @@ tweenStream s0 t0 = VarT $ f s0 t0 0
 -- more than once ;)
 --
 -- `tween` concludes returning the latest output value.
-tween :: (Monad m, Real f, Fractional f, Real t)
+tween :: (Monad m, Real t, Real f, Fractional f)
       => Easing t f -> t -> t -> f -> TweenT f t m t
 tween f start end dur = SplineT g
   where c = end - start
