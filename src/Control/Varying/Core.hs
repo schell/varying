@@ -64,10 +64,12 @@ import           Prelude                    hiding (id, (.))
 -- | A continuously varying value, with effects.
 -- It's a kind of <https://en.wikipedia.org/wiki/Mealy_machine Mealy machine>
 -- (an automaton).
-newtype VarT m a b = VarT { runVarT :: a -> m (b, VarT m a b) }
-                            -- ^ Run a @VarT@ computation with an input value of
-                            -- type 'a', yielding a step - a value of type 'b'
-                            -- and a new computation for yielding the next step.
+newtype VarT m a b
+  = VarT
+  { runVarT :: a -> m (b, VarT m a b) }
+  -- ^ Run a @VarT@ computation with an input value of
+  -- type 'a', yielding a step - a value of type 'b'
+  -- and a new computation for yielding the next step.
 
 
 -- | A var parameterized with Identity that takes input of type @a@
@@ -175,8 +177,21 @@ instance Monad m => ArrowApply (VarT m) where
     (c, _) <- runVarT v b
     return (c, app)
 
+-- | Inputs can depend on outputs as long as no time-travel is required.
+--
+-- This isn't the best example but it does make a good test case:
+-- >>> :{
+-- let
+--   testVar :: VarT IO Double (Maybe Double)
+--   testVar = proc val -> do
+--     rec _ <- returnA -< 0.5
+--     returnA -< Just 5.0
+-- in
+--   testVarOver testVar [5.0]
+-- >>> :}
+-- Just 5.0
 instance MonadFix m => ArrowLoop (VarT m) where
-  loop vmbdcd = VarT $ \b -> fmap fst $ mfix $ \(_, d) -> do
+  loop vmbdcd = VarT $ \b -> fmap fst $ mfix $ \(~(_, d)) -> do
     ((c1, d1), vmbdcd1) <- runVarT vmbdcd (b, d)
     return ((c1, loop vmbdcd1), d1)
 
