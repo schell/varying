@@ -60,6 +60,10 @@ import           Control.Varying.Spline    (SplineT (..), mapOutput, scanSpline,
 import           Control.Varying.Event     (after)
 import           Data.Functor.Identity     (Identity)
 
+
+-- $setup
+-- >>> import Control.Varying.Core
+
 --------------------------------------------------------------------------------
 -- $lerping
 -- These pure functions take a `c` (total change in value, ie end - start),
@@ -147,6 +151,21 @@ scanTween s t dts = evalStateT (scanSpline s t dts) 0
 
 -- | Converts a tween into a continuous value stream. This is the tween version
 -- of `outputStream`.
+--
+-- >>> :{
+-- let
+--   x :: Tween Float Float
+--   x = tween linear 0 1 1
+--   y :: Tween Float Float
+--   y = tween linear 0 1 2
+--   v :: Var Float (Float, Float)
+--   v = (,)
+--       <$> tweenStream 0 x
+--       <*> tweenStream 0 y
+-- in
+--   testVarOver v [0.5, 0.5, 0.5, 0.5]
+-- >>> :}
+-- ()
 tweenStream :: (Monad m, Num f)
             => TweenT f t m x -> t -> VarT m f t
 tweenStream s0 t0 = VarT $ f s0 t0 0
