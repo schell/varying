@@ -27,3 +27,6 @@ import           Control.Varying.Core   as V
 import           Control.Varying.Event  as V
 import           Control.Varying.Spline as V
 import           Control.Varying.Tween  as V
+
+-- TODO: CICD and auto-push master to hackage.
+-- This would be very nice.

@@ -135,10 +135,6 @@ easeOutCirc c t b = let t' = (realToFrac t - 1)
 linear :: (Floating t, Real f) => Easing t f
 linear c t b = c * realToFrac t + b
 
--- TODO: Don't use StateT for leftover time in Tweens.
--- This creates a funky state where running two tween splines together
--- causes leftover time interplay. Think about continuations or something.
-
 type TweenT f t m = SplineT f t (StateT f m)
 type Tween f t = TweenT f t Identity
 
@@ -152,20 +148,50 @@ scanTween s t dts = evalStateT (scanSpline s t dts) 0
 -- | Converts a tween into a continuous value stream. This is the tween version
 -- of `outputStream`.
 --
+-- When tweening multiple parameters concurrently, it is preferable to stream the
+-- tweens early, then combine them using Applicative as this example shows:
+--
 -- >>> :{
 -- let
---   x :: Tween Float Float
+--   x :: TweenT Float Float IO Float
 --   x = tween linear 0 1 1
---   y :: Tween Float Float
+--   y :: TweenT Float Float IO Float
 --   y = tween linear 0 1 2
---   v :: Var Float (Float, Float)
+--   v :: VarT IO Float (Float, Float)
 --   v = (,)
---       <$> tweenStream 0 x
---       <*> tweenStream 0 y
+--       <$> tweenStream x 0
+--       <*> tweenStream y 0
 -- in
 --   testVarOver v [0.5, 0.5, 0.5, 0.5]
 -- >>> :}
--- ()
+-- (0.5,0.25)
+-- (1.0,0.5)
+-- (1.0,0.75)
+-- (1.0,1.0)
+--
+-- You may be tempted to use functions from @Control.Varying.Spline to combine
+-- your tweens, but be forwarned - treating Tween as Spline is hard to reason
+-- about and often yields unexpected behavior. In the future TweenT may not be a
+-- type synonym of SplineT, so it's best not to treat it as one.
+--
+-- >>> import Control.Varying.Spline (race)
+-- >>> :{
+-- let
+--   x :: TweenT Float Float IO Float
+--   x = tween linear 0 1 1
+--   y :: TweenT Float Float IO Float
+--   y = tween linear 0 1 2
+--   xy :: TweenT Float (Float, Float) IO (Either Float Float)
+--   xy = race (,) x y
+--   v :: VarT IO Float (Float, Float)
+--   v = tweenStream xy (0, 0)
+-- in
+--   testVarOver v [0.5, 0.5, 0.5, 0.5]
+-- >>> :}
+-- (0.5,0.5)
+-- (0.5,0.5)
+-- (0.5,0.5)
+-- (0.5,0.5)
 tweenStream :: (Monad m, Num f)
             => TweenT f t m x -> t -> VarT m f t
 tweenStream s0 t0 = VarT $ f s0 t0 0
@@ -208,6 +234,7 @@ tween f start end dur = SplineT g
                       return $ Left end
               else do put t
                       return $ Right (f c (t/dur) b, SplineT g)
+
 
 -- | A version of 'tween' that discards the result. It is simply
 --
