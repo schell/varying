@@ -13,17 +13,15 @@
 --   time you use. At some point it would be great to be able to tween
 --   arbitrary types, and possibly tween one type into another (pipe
 --   dreams).
-
-{-# LANGUAGE Rank2Types   #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Rank2Types                 #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 module Control.Varying.Tween
   ( -- * Tweening types
     Easing
   , TweenT
   , Tween
-    -- * Running tweens
-  , runTweenT
-  , scanTween
-  , tweenStream
     -- * Creating tweens
     -- $creation
   , tween
@@ -31,6 +29,8 @@ module Control.Varying.Tween
   , constant
   , withTween
   , withTween_
+    -- * Combining tweens
+    -- $combining
     -- * Interpolation functions
     -- $lerping
   , linear
@@ -47,22 +47,40 @@ module Control.Varying.Tween
   , easeOutCubic
   , easeInQuad
   , easeOutQuad
-    -- * Writing your own tweens
-    -- $writing
+    -- * Running tweens
+  , tweenStream
+  , runTweenT
+  , scanTween
   ) where
 
 import           Control.Monad             (void)
 import           Control.Monad.Trans.State (StateT, evalStateT, get, put,
                                             runStateT)
+import           Control.Monad.Trans.Class (MonadTrans (..))
 import           Control.Varying.Core      (VarT (..), done)
+import           Control.Varying.Event     (after)
 import           Control.Varying.Spline    (SplineT (..), mapOutput, scanSpline,
                                             untilEvent_)
-import           Control.Varying.Event     (after)
+import           Data.Bifunctor            (first, second)
 import           Data.Functor.Identity     (Identity)
+import           GHC.Generics              (Generic)
 
 
 -- $setup
 -- >>> import Control.Varying.Core
+
+
+--------------------------------------------------------------------------------
+-- | An easing function. The parameters are often named `c`, `t` and `b`,
+-- where `c` is the total change in value over the complete duration
+-- (endValue - startValue), `t` is the current percentage (0 to 1) of the
+-- duration that has elapsed and `b` is the start value.
+--
+-- To make things simple only numerical values can be tweened and the type
+-- of time deltas must match the tween's value type. This may change in the
+-- future :)
+type Easing t f = t -> f -> t -> t
+
 
 --------------------------------------------------------------------------------
 -- $lerping
@@ -71,6 +89,8 @@ import           Data.Functor.Identity     (Identity)
 -- an interpolation of a value. To see what these look like please check
 -- out http://www.gizma.com/easing/.
 --------------------------------------------------------------------------------
+
+
 -- | Ease in quadratic.
 easeInQuad :: (Fractional t, Real f) => Easing t f
 easeInQuad c t b =  c * realToFrac (t*t) + b
@@ -135,21 +155,80 @@ easeOutCirc c t b = let t' = (realToFrac t - 1)
 linear :: (Floating t, Real f) => Easing t f
 linear c t b = c * realToFrac t + b
 
-type TweenT f t m = SplineT f t (StateT f m)
-type Tween f t = TweenT f t Identity
+-- | A 'TweenT' is a 'SplineT' that holds a duration in local state. This allows
+-- 'TweenT's to be sequenced monadically.
+--
+-- * 'f' is the input time delta type (the input type)
+-- * 't' is the start and end value type (the output type)
+-- * 'a' is the result value type
+--
+-- You can sequence 'TweenT's with monadic notation to produce more complex ones.
+-- This is especially useful for animation:
+--
+-- >>> :{
+-- let
+--   tweenInOutExpo
+--     :: ( Monad m, Floating t, Real t, Real f, Fractional f )
+--     => t
+--     -> t
+--     -> f
+--     -> TweenT f t m t
+--   tweenInOutExpo start end dur = do
+--       x <- tween easeInExpo start (end/2) (dur/2)
+--       tween easeOutExpo x end $ dur/2
+-- >>> :}
+newtype TweenT f t m a
+  = TweenT { unTweenT :: SplineT f t (StateT f m) a }
+  deriving (Generic, Functor, Applicative, Monad)
 
-runTweenT :: TweenT f t m x -> f -> f -> m (Either x (t, TweenT f t m x), f)
-runTweenT s dt = runStateT (runSplineT s dt)
 
-scanTween :: (Monad m, Num f)
-          => TweenT f t m a -> t -> [f] -> m [t]
-scanTween s t dts = evalStateT (scanSpline s t dts) 0
+instance MonadTrans (TweenT f t) where
+  lift = TweenT . lift . lift
+
+
+type Tween f t a = TweenT f t Identity a
+
+
+runTweenT
+  :: Functor m
+  => TweenT f t m a
+  -> f
+  -- ^ The input time delta this frame
+  -> f
+  -- ^ The leftover time delta from last frame
+  -> m (Either a (t, TweenT f t m a), f)
+  -- ^ Returns
+  -- @
+  -- a tuple of
+  --   either
+  --     the result
+  --     or a tuple of
+  --       this step's output value
+  --       and the tween for the next step
+  --   and the leftover time delta for the next step
+  -- @
+runTweenT (TweenT s) dt leftover =
+  first (second $ second TweenT)
+  <$> runStateT
+        (runSplineT s dt)
+        leftover
+
+
+scanTween
+  :: (Monad m, Num f)
+  => TweenT f t m a
+  -> t
+  -> [f]
+  -> m [t]
+scanTween (TweenT s) t dts =
+  evalStateT
+    (scanSpline s t dts)
+    0
+
 
 -- | Converts a tween into a continuous value stream. This is the tween version
--- of `outputStream`.
---
--- When tweening multiple parameters concurrently, it is preferable to stream the
--- tweens early, then combine them using Applicative as this example shows:
+-- of 'Control.Varying.Spline.outputStream'. This is the preferred way to run
+-- your tweens.
 --
 -- >>> :{
 -- let
@@ -168,37 +247,28 @@ scanTween s t dts = evalStateT (scanSpline s t dts) 0
 -- (1.0,0.5)
 -- (1.0,0.75)
 -- (1.0,1.0)
---
--- You may be tempted to use functions from @Control.Varying.Spline to combine
--- your tweens, but be forwarned - treating Tween as Spline is hard to reason
--- about and often yields unexpected behavior. In the future TweenT may not be a
--- type synonym of SplineT, so it's best not to treat it as one.
---
--- >>> import Control.Varying.Spline (race)
--- >>> :{
--- let
---   x :: TweenT Float Float IO Float
---   x = tween linear 0 1 1
---   y :: TweenT Float Float IO Float
---   y = tween linear 0 1 2
---   xy :: TweenT Float (Float, Float) IO (Either Float Float)
---   xy = race (,) x y
---   v :: VarT IO Float (Float, Float)
---   v = tweenStream xy (0, 0)
--- in
---   testVarOver v [0.5, 0.5, 0.5, 0.5]
--- >>> :}
--- (0.5,0.5)
--- (0.5,0.5)
--- (0.5,0.5)
--- (0.5,0.5)
-tweenStream :: (Monad m, Num f)
-            => TweenT f t m x -> t -> VarT m f t
-tweenStream s0 t0 = VarT $ f s0 t0 0
-  where f s t l i = do (e, l1) <- runTweenT s i l
-                       case e of
-                         Left _        -> return (t, done t)
-                         Right (b, s1) -> return (b, VarT $ f s1 b l1)
+tweenStream
+  :: forall m f t x
+   . (Functor m, Monad m, Num f)
+  => TweenT f t m x
+  -- ^ The tween to convert into a stream
+  -> t
+  -- ^ An initial output value
+  -> VarT m f t
+tweenStream s0 t0 = VarT $ go s0 t0 0
+  where
+    go ::
+         TweenT f t m x -- The Tween
+      -> t -- the last output value
+      -> f -- the leftover time delta from last fram
+      -> f -- the input time delta
+      -> m (t, VarT m f t)
+    go s t l i = do
+      (e, l1) <- runTweenT s i l
+      case e of
+        Left _        -> return (t, done t)
+        Right (b, s1) -> return (b, VarT $ go s1 b l1)
+
 
 --------------------------------------------------------------------------------
 -- $creation
@@ -219,21 +289,25 @@ tweenStream s0 t0 = VarT $ f s0 t0 0
 -- `tween` concludes returning the latest output value.
 tween :: (Monad m, Real t, Real f, Fractional f)
       => Easing t f -> t -> t -> f -> TweenT f t m t
-tween f start end dur = SplineT g
-  where c = end - start
-        b = start
-        g dt = do
-          leftover <- get
-          let t = dt + leftover
-
-          if t == dur
-            then do put 0
-                    return $ Right (end, return end)
-            else if t > dur
-              then do put $ t - dur - dt
-                      return $ Left end
-              else do put t
-                      return $ Right (f c (t/dur) b, SplineT g)
+tween f start end dur =
+  TweenT
+    $ SplineT g
+  where
+    c = end - start
+    b = start
+    g dt = do
+      leftover <- get
+      let
+        t = dt + leftover
+      if t == dur
+        then
+          put 0 >> return (Right (end, return end))
+        else
+          if t > dur
+          then
+            put (t - dur - dt) >> return (Left end)
+          else
+            put t >> return (Right (f c (t/dur) b, SplineT g))
 
 
 -- | A version of 'tween' that discards the result. It is simply
@@ -248,14 +322,19 @@ tween_ f a b c = Control.Monad.void (tween f a b c)
 
 -- | A version of 'tween' that maps its output using the given constant
 -- function.
+--
 -- @
 -- withTween ease from to dur f = mapOutput (pure f) $ tween ease from to dur
 -- @
 withTween :: (Monad m, Real t, Real a, Fractional a)
           => Easing t a -> t -> t -> a -> (t -> x) -> TweenT a x m t
-withTween ease from to dur f = mapOutput (pure f) $ tween ease from to dur
+withTween ease from to dur f =
+  TweenT
+    $ mapOutput (pure f)
+    $ unTweenT
+    $ tween ease from to dur
 
--- | A version of 'withTween' that discards its output.
+-- | A version of 'withTween' that discards its result.
 withTween_ :: (Monad m, Real t, Real a, Fractional a)
            => Easing t a -> t -> t -> a -> (t -> x) -> TweenT a x m ()
 withTween_ ease from to dur f = Control.Monad.void (withTween ease from to dur f)
@@ -263,24 +342,6 @@ withTween_ ease from to dur f = Control.Monad.void (withTween ease from to dur f
 -- | Creates a tween that performs no interpolation over the duration.
 constant :: (Monad m, Num t, Ord t)
          => a -> t -> TweenT t a m a
-constant value duration = pure value `untilEvent_` after duration
---------------------------------------------------------------------------------
--- $writing
--- To create your own tweens just write a function that takes a start
--- value, end value and a duration and return an event stream.
---
--- @
--- tweenInOutExpo start end dur = do
---     (dt, x) <- tween easeInExpo start end (dur/2)
---     tween easeOutExpo x end $ dt + dur/2
--- @
---------------------------------------------------------------------------------
--- | An easing function. The parameters are often named `c`, `t` and `b`,
--- where `c` is the total change in value over the complete duration
--- (endValue - startValue), `t` is the current percentage (0 to 1) of the
--- duration that has elapsed and `b` is the start value.
---
--- To make things simple only numerical values can be tweened and the type
--- of time deltas must match the tween's value type. This may change in the
--- future :)
-type Easing t f = t -> f -> t -> t
+constant value duration =
+  TweenT
+    $ pure value `untilEvent_` after duration

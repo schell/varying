@@ -7,13 +7,8 @@ cache:
 build:
   stage: build
   script:
-  -
-  artifacts:
-    paths:
-    - payload.tar.gz
-    - pages.tar.gz
-    - scripts.tar.gz
-    - terraform.tar.gz
+  - source ci.sh
+  - build
 
 # TODO: Make deployment manual
 deploy_hackage:
@@ -21,12 +16,12 @@ deploy_hackage:
   dependencies:
   - build
   environment:
-    name: $CI_COMMIT_REF_NAME
-    url: https://hackage.com/schell/varying
+    name: master
+    url: https://hackage.haskell.org/package/varying
   only:
   - master
   when:
   - manual
   script:
-  - source scripts/ci.sh
-  - deploy $CI_COMMIT_REF_NAME
+  - source ci.sh
+  - deploy

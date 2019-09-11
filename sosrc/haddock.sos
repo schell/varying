@@ -1,5 +1,8 @@
 # This is for reviewing documentation
 - patterns:
   - .*/[^_]*\.l?hs$
+  excludes:
+  - \#
+  - flycheck
   commands:
   - stack haddock

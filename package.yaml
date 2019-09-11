@@ -1,0 +1,108 @@
+name:                varying
+github:              "schell/varying"
+# The package version.  See the Haskell package versioning policy (PVP)
+# for standards guiding when and how versions should be incremented.
+# http://www.haskell.org/haskellwiki/Package_versioning_policy
+# PVP summary:      +-+------- breaking API changes
+#                   | | +----- non-breaking API additions
+#                   | | | +--- code changes with no API change
+version:             0.8.0.0
+# A short (one-line) description of the package.
+synopsis:            FRP through value streams and monadic splines.
+# A longer description of the package.
+description:         Varying is a FRP library aimed at providing a
+                     simple way to describe values that change over a domain.
+                     It allows monadic, applicative and arrow notation and has
+                     convenience functions for tweening. Great for animation.
+
+# URL for the project homepage or repository.
+homepage:            https://github.com/schell/varying
+
+# The license under which the package is released.
+license:             MIT
+
+# The file containing the license text.
+license-file:        LICENSE
+
+# The package author(s).
+author:              Schell Scivally
+
+# An email address to which users can send suggestions, bug reports, and
+# patches.
+maintainer:          schell@takt.com
+
+# A copyright notice.
+# copyright:
+
+category:            Control, FRP
+
+extra-source-files:
+- README.md
+- changelog.md
+
+dependencies:
+- base >=4.8 && < 5.0
+- transformers >= 0.3
+- contravariant >= 1.4
+
+library:
+  ghc-options: -Wall
+  source-dirs: src
+
+executables:
+  varying-example:
+    source-dirs:   app
+    main:          Main.hs
+    ghc-options:
+    - -Wall
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+
+    dependencies:
+    - time >= 1.4
+    - varying
+
+tests:
+  doctests:
+    main:                DocTests.hs
+    source-dirs:         test
+    other-modules:       []
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - doctest
+    - varying
+
+
+  other:
+    main:             Main.hs
+    source-dirs:      test
+    other-modules:    []
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - hspec
+    - time >=1.4
+    - QuickCheck
+    - varying
+
+
+benchmarks:
+  varying-bench:
+    source-dirs:      bench
+    main:             Main.hs
+    dependencies:
+    - time >=1.4
+    - transformers
+    - varying
+    - criterion
+    ghc-options:
+    - -Wall
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
