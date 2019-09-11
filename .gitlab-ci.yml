@@ -19,8 +19,7 @@ deploy_hackage:
     url: https://hackage.haskell.org/package/varying
   only:
   - master
-  when:
-  - manual
+  when: manual
   script:
   - source ci.sh
   - deploy
