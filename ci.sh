@@ -18,6 +18,8 @@ prebuild () {
 
 # build the project
 build () {
+  prebuild
+  echo "Building..."
   stack install --only-dependencies
   stack build || exit 1
   stack test || exit 1
@@ -26,8 +28,8 @@ build () {
 
 
 deploy () {
-  echo "Deploying..."
   prebuild
+  echo "Deploying..."
   stack build
   stack sdist .
   echo $hackage_creds > $STACK_ROOT/upload/credentials.json
