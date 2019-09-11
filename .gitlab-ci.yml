@@ -10,7 +10,6 @@ build:
   - source ci.sh
   - build
 
-# TODO: Make deployment manual
 deploy_hackage:
   stage: deploy
   dependencies:

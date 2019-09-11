@@ -30,5 +30,6 @@ deploy () {
   prebuild
   stack build
   stack sdist .
+  echo $hackage_creds > $STACK_ROOT/upload/credentials.json
   stack upload --no-signature .
 }
