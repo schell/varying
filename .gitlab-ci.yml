@@ -1,0 +1,32 @@
+image: ubuntu:18.04
+cache:
+  paths:
+  - .stack/
+  - .stack-work/
+
+build:
+  stage: build
+  script:
+  -
+  artifacts:
+    paths:
+    - payload.tar.gz
+    - pages.tar.gz
+    - scripts.tar.gz
+    - terraform.tar.gz
+
+# TODO: Make deployment manual
+deploy_hackage:
+  stage: deploy
+  dependencies:
+  - build
+  environment:
+    name: $CI_COMMIT_REF_NAME
+    url: https://hackage.com/schell/varying
+  only:
+  - master
+  when:
+  - manual
+  script:
+  - source scripts/ci.sh
+  - deploy $CI_COMMIT_REF_NAME
