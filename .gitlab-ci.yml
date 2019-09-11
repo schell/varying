@@ -1,0 +1,25 @@
+image: ubuntu:18.04
+cache:
+  paths:
+  - .stack/
+  - .stack-work/
+
+build:
+  stage: build
+  script:
+  - source ci.sh
+  - build
+
+deploy_hackage:
+  stage: deploy
+  dependencies:
+  - build
+  environment:
+    name: master
+    url: https://hackage.haskell.org/package/varying
+  only:
+  - master
+  when: manual
+  script:
+  - source ci.sh
+  - deploy

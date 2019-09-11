@@ -92,6 +92,7 @@ instance Applicative m => Functor (VarT m b) where
     where g (b, vb) = (f b, f <$> vb)
 
 -- | A var is a category.
+--
 -- @
 --   id = var id
 --   f . g = g >>> f
@@ -180,6 +181,7 @@ instance Monad m => ArrowApply (VarT m) where
 -- | Inputs can depend on outputs as long as no time-travel is required.
 --
 -- This isn't the best example but it does make a good test case:
+--
 -- >>> :{
 -- let
 --   testVar :: VarT IO Double (Maybe Double)

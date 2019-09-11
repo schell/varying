@@ -15,7 +15,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs            #-}
 {-# LANGUAGE LambdaCase       #-}
-{-# LANGUAGE TupleSections    #-}
 module Control.Varying.Spline
   ( -- * Spline
     Spline
@@ -51,10 +50,7 @@ import           Control.Monad.Trans.Class
 import           Control.Varying.Core
 import           Control.Varying.Event
 import           Data.Functor.Identity
-import           Data.Monoid
 
--- $setup
--- >>> import Control.Varying.Time
 
 -- | 'SplineT' shares all the types of 'VarT' and adds a result value. Its
 -- monad, input and output types (@m@, @a@ and @b@, respectively) represent the
@@ -101,6 +97,7 @@ instance Monad m => Monad (SplineT a b m) where
                        Left  c               -> runSplineT (f c) a
                        Right (b, SplineT s1) -> return $ Right (b, SplineT $ g s1)
 
+
 -- | A spline responds to 'pure' by returning a spline that never produces an
 -- output value and immediately returns the argument. It responds to '<*>' by
 -- applying the left arguments result value (the function) to the right
@@ -117,8 +114,8 @@ instance Monad m => Applicative (SplineT a b m) where
   pure = return
   sf <*> sx = do
     f <- sf
-    x <- sx
-    return $ f x
+    f <$> sx
+
 
 -- | A spline is a transformer by running the effect and immediately concluding,
 -- using the effect's result as the result value.
@@ -315,21 +312,39 @@ merge apnd s1 s2 = SplineT $ f s1 s2
 -- spline's result. This is helpful when you want to sample the last
 -- output value in order to determine the next spline to sequence.
 --
+-- The tupled value is returned in as a 'Maybe b' since it is not
+-- guaranteed that an output value is produced before a Spline concludes.
+--
 -- >>> :{
--- let s = do (Just x, "boom") <- capture $ do step 0
---                                             step 1
---                                             step 2
---                                             return "boom"
---            -- x is 2
---            step $ x + 1
--- in testVarOver (outputStream s 666) [(),(),(),()]
+-- let
+--   s :: MonadIO m => SplineT () Int m String
+--   s = do
+--     (mayX, boomStr) <-
+--       capture
+--         $ do
+--           step 0
+--           step 1
+--           step 2
+--           return "boom"
+--     -- x is 2, but 'capture' can't be sure of that
+--     maybe
+--       (return "Failure")
+--       ( (>> return boomStr)
+--         . step
+--         . (+1)
+--       )
+--       mayX
+-- in
+--   testVarOver (outputStream s 666) [(),(),(),()]
 -- >>> :}
 -- 0
 -- 1
 -- 2
 -- 3
-capture :: Monad m
-        => SplineT a b m c -> SplineT a b m (Event b, c)
+capture
+  :: Monad m
+  => SplineT a b m c
+  -> SplineT a b m (Maybe b, c)
 capture = SplineT . f Nothing
     where f mb s = runSplineT s >=> return . \case
             Left c        -> Left (mb, c)
