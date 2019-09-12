@@ -1,6 +1,6 @@
 # varying
 [![Hackage](https://img.shields.io/hackage/v/varying.svg)](http://hackage.haskell.org/package/varying)
-[![Build Status](https://travis-ci.org/schell/varying.svg)](https://travis-ci.org/schell/varying)
+[![Build Status](https://gitlab.com/schell/vayring/badges/branch/build.svg)](https://gitlab.com/schell/varying)
 
 This library provides automaton based value streams and sequencing useful for
 functional reactive programming (FRP) and locally stateful programming (LSP).
