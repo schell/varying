@@ -34,5 +34,5 @@ deploy () {
   stack sdist .
   mkdir -p $STACK_ROOT/upload
   echo $hackage_creds > ${STACK_ROOT}/upload/credentials.json
-  stack upload --no-signature .
+  stack upload .
 }
