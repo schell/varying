@@ -5,6 +5,7 @@
 This library provides automaton based value streams and sequencing useful for
 functional reactive programming (FRP) and locally stateful programming (LSP).
 
+
 ## Getting started
 
 ```haskell
