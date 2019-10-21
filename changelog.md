@@ -34,3 +34,5 @@ change log
 0.7.1.2 - Fixed broken ArrowLoop instance, updated documentation.
 
 0.8.0.0 - TweenT is a newtype.
+
+0.8.1.0 - Remove senseless ArrowApply instance

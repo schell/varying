@@ -4,10 +4,10 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 23f79975d60664192d4aec0699c6a80542dc85db8ebfb018fd84bea51c196f7b
+-- hash: 238c3b9ce9b85922d1e595508d4616c90817444c1d7b7e3c85527c9014f90094
 
 name:           varying
-version:        0.8.0.0
+version:        0.8.1.0
 synopsis:       FRP through value streams and monadic splines.
 description:    Varying is a FRP library aimed at providing a simple way to describe values that change over a domain. It allows monadic, applicative and arrow notation and has convenience functions for tweening. Great for animation.
 category:       Control, FRP
