@@ -173,11 +173,6 @@ instance Monad m => ArrowChoice (VarT m) where
       (d, g1) <- runVarT g c
       return (d, f ||| g1)
 
-instance Monad m => ArrowApply (VarT m) where
-  app = VarT $ \(v, b) -> do
-    (c, _) <- runVarT v b
-    return (c, app)
-
 -- | Inputs can depend on outputs as long as no time-travel is required.
 --
 -- This isn't the best example but it does make a good test case:
